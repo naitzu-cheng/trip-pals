@@ -167,7 +167,32 @@ const rgba = (hex, a) => {
 
 const SLEEVES = { tee: 'short', tank: 'none', shirt: 'long', blouse: 'wide', hoodie: 'long', sweater: 'long', jacket: 'long', coat: 'puffy', dress: 'puff', yukata: 'wide' };
 const HEAD_SCALE = 0.85; // 頭部零件以「半徑約 0.28 的頭」設計
-const HEAD_Y = 0.72;
+// 身體比例：零件照「髖部在 0.235」設計，再整體壓矮（腿 × LEG_K、軀幹 × TRUNK_K）
+const HIP = 0.235, LEG_K = 0.66, TRUNK_K = 0.76;
+const NEW_HIP = HIP * LEG_K;
+const mapY = y => (y >= HIP ? NEW_HIP + (y - HIP) * TRUNK_K : y * LEG_K);
+const HEAD_Y = 0.72 - (0.5 - mapY(0.5));
+
+// 把身體上的零件「烘」進新比例（直接改頂點，不會讓擺動的手腳變形）
+function bakeShorter(m) {
+  m.updateMatrix();
+  const g = m.geometry;
+  g.applyMatrix4(m.matrix);
+  const p = g.attributes.position, n = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i), k = y >= HIP ? TRUNK_K : LEG_K;
+    p.setY(i, mapY(y));
+    if (n) {
+      const nx = n.getX(i), ny = n.getY(i) / k, nz = n.getZ(i), l = Math.hypot(nx, ny, nz) || 1;
+      n.setXYZ(i, nx / l, ny / l, nz / l);
+    }
+  }
+  p.needsUpdate = true;
+  g.computeBoundingSphere();
+  m.position.set(0, 0, 0);
+  m.rotation.set(0, 0, 0);
+  m.scale.set(1, 1, 1);
+}
 
 // 舊版設定相容
 export function normalize(cfg) {
@@ -198,7 +223,14 @@ export function buildAvatar(cfg = {}) {
   // 腿：短短的柱子，從髖部整條擺動
   const legs = [1, -1].map(s => {
     const p = new THREE.Group();
-    p.position.set(s * 0.047, 0.235, 0);
+    p.position.set(s * 0.047, NEW_HIP, 0);
+    const legGroup = new THREE.Group();
+    legGroup.scale.y = LEG_K;
+    const shoeGroup = new THREE.Group();
+    shoeGroup.position.y = HIP - NEW_HIP;
+    const pivot = p;
+    {
+    const p = legGroup;
     p.add(mesh(capsule(0.038, 0.15), c.legwear === 'tights' ? fabric(c.legColor) : skin, [0, -0.105, 0]));
     if (c.legwear === 'socks') p.add(mesh(cyl(0.04, 0.04, 0.045), fabric(c.legColor), [0, -0.18, 0]));
     if (c.legwear === 'knee') p.add(mesh(cyl(0.041, 0.04, 0.11), fabric(c.legColor), [0, -0.15, 0]));
@@ -210,9 +242,11 @@ export function buildAvatar(cfg = {}) {
         p.add(mesh(cyl(0.041, 0.041, 0.022), fabric(shade(c.bottom, -0.15)), [0, -0.172, 0]));
       }
     }
-    addShoe(p, c);
-    body.add(p);
-    return p;
+    }
+    pivot.add(legGroup, shoeGroup);
+    addShoe(shoeGroup, c);
+    body.add(pivot);
+    return pivot;
   });
 
   // 下身
@@ -240,8 +274,9 @@ export function buildAvatar(cfg = {}) {
   const sleeve = SLEEVES[c.topStyle];
   const arms = [1, -1].map(s => {
     const p = new THREE.Group();
-    p.position.set(s * 0.088, 0.448, 0);
+    p.position.set(s * 0.088, mapY(0.448), 0);
     p.rotation.z = s * 0.72;
+    p.scale.setScalar(0.88);
     p.add(mesh(sphere(0.037), sleeve === 'none' ? skin : top, [0, 0, 0]));
     p.add(mesh(capsule(0.03, 0.08), skin, [0, -0.06, 0]));
     p.add(mesh(sphere(0.036), skin, [0, -0.118, 0]));
@@ -256,6 +291,9 @@ export function buildAvatar(cfg = {}) {
     body.add(p);
     return p;
   });
+
+  // 軀幹、下身、配件壓成新比例（手腳的 Group 不動）
+  for (const ch of [...body.children]) if (ch.isMesh) bakeShorter(ch);
 
   // 頭
   const head = new THREE.Group();
@@ -279,7 +317,9 @@ export function buildAvatar(cfg = {}) {
     mk.material.side = THREE.DoubleSide;
     head.add(mk);
   }
+  const before = new Set(body.children);
   addAccessories(body, c);
+  for (const ch of body.children) if (!before.has(ch) && ch.isMesh) bakeShorter(ch);
 
   // 動畫：整隻手腳擺動
   let blinkAt = 2;

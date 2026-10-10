@@ -191,7 +191,7 @@ export function cloudConfigured() {
 
 export async function supabase() {
   if (sbClient) return sbClient;
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.4');
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.3');
   const c = window.TRIPPALS_CONFIG;
   sbClient = createClient(c.SUPABASE_URL, c.SUPABASE_ANON_KEY, { auth: { persistSession: true } });
   return sbClient;

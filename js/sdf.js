@@ -161,3 +161,15 @@ export function maskGeometry() {
   MASK.userData.shared = true;
   return MASK;
 }
+
+// 從正前方往後找，回傳頭表面在 (x, y) 的 z 和法線（用來把眼鏡貼在臉上）
+export function faceSurface(x, y) {
+  let z = 0.45;
+  while (z > 0 && headSDF(x, y, z) > 0) z -= 0.002;
+  const e = 0.003;
+  const n = new THREE.Vector3(
+    headSDF(x + e, y, z) - headSDF(x - e, y, z),
+    headSDF(x, y + e, z) - headSDF(x, y - e, z),
+    headSDF(x, y, z + e) - headSDF(x, y, z - e)).normalize();
+  return { z, n };
+}

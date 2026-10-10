@@ -54,8 +54,14 @@ const BUNS = {
 
 // 髮束：繞著頭一圈分成一撮一撮（中間圓鼓、髮束之間凹下去），正前方剛好是一撮
 const CLUMPS = 15;
+let SWEEP = null; // 由 makeHairSDF 設定目前的瀏海樣式
 export function clump(x, y, z) {
-  const a = Math.atan2(x, z) + Math.sin(y * 5) * 0.06;
+  let a = Math.atan2(x, z) + Math.sin(y * 5) * 0.06;
+  if (SWEEP && z > 0) {
+    const front = clamp(z / 0.15, 0, 1), down = Math.max(0, 0.28 - y);
+    if (SWEEP === 'middle') a += Math.sign(x) * down * 2.2 * front;
+    if (SWEEP === 'side') a += down * 1.7 * front;
+  }
   const fade = clamp((Math.hypot(x, z) - 0.05) / 0.15, 0, 1); // 頭頂髮旋附近漸漸平滑
   const th = (a * CLUMPS) / 2 + 0.35 * Math.sin(a * 3); // 髮束粗細不完全一樣
   const ridge = 1 - Math.exp(-(Math.cos(th) ** 2) * 2.6); // 凹縫是圓滑的，不是尖 V
@@ -70,13 +76,24 @@ function tailSDF(x, y, z, [a, m, b, r1, r2, r3]) {
   return smin(roundCone(x, y, z, a, m, r1, r2), roundCone(x, y, z, m, b, r2, r3), 0.03);
 }
 
+// 耳朵的位置（要和 avatar.js 一致）：短髮類會在這裡剪出缺口讓耳朵露出來
+export const EAR = { x: 0.285, y: -0.07, z: -0.015 };
+const EAR_CUT = ['short', 'ponytail', 'lowtail', 'sidetail', 'pigtails', 'buns', 'bun', 'braids', 'messy', 'spiky'];
+const SIDE_LOCKS = ['short', 'ponytail', 'lowtail', 'sidetail', 'pigtails', 'buns', 'bun', 'braids'];
+
 export function makeHairSDF(c) {
+  SWEEP = c.bangs;
   const style = ['buns', 'bun', 'braids'].includes(c.hairStyle) || TAILS[c.hairStyle] ? 'short' : c.hairStyle;
   const hem = HEM[style] || HEM.short;
   const bang = BANG_LINE[c.bangs] || BANG_LINE.full;
   const hatted = ['fluffy', 'beanie', 'hood', 'cap'].includes(c.hat);
   const T = hatted ? 0.012 : 0.028;
-  const tails = TAILS[c.hairStyle] || [];
+  const tails = (TAILS[c.hairStyle] || []).map(t => {
+    if (hatted || c.hat === 'beret' || c.hat === 'straw') {
+      if (c.hairStyle === 'ponytail') return [V(0, 0.02, -0.29), V(0, -0.12, -0.38), V(0.01, -0.4, -0.33), 0.08, 0.066, 0.025];
+    }
+    return t;
+  });
   const buns = BUNS[c.hairStyle] || [];
   const long = style === 'long' || style === 'wavy', bob = style === 'bob';
 
@@ -101,6 +118,17 @@ export function makeHairSDF(c) {
     const tips = c.bangs === 'none' ? 0 : 0.026 * clump(x, 0.1, 0.27);
     const opening = Math.max(y - (bang(x) - tips), Math.max(0.03 - z, Math.abs(x) - faceW));
     hair = Math.max(hair, -opening);
+    // 5b. 耳朵缺口（短髮類）
+    if (EAR_CUT.includes(c.hairStyle)) {
+      const ex = Math.abs(x) - EAR.x;
+      hair = Math.max(hair, -ellipsoid(ex, y, z, 0, EAR.y + 0.005, EAR.z, 0.085, 0.095, 0.075));
+    }
+    // 5c. 鬢角：耳朵前面垂下一小撮
+    if (SIDE_LOCKS.includes(c.hairStyle) && c.hat !== 'hood') {
+      const s2 = x >= 0 ? 1 : -1;
+      const lock = roundCone(x, y, z, V(s2 * 0.235, 0.04, 0.085), V(s2 * 0.25, -0.13, 0.1), 0.045, 0.02);
+      hair = smin(hair, lock - grooves(x, y, z, 0.006), 0.02);
+    }
     // 6. 空氣瀏海的縫隙
     if (c.bangs === 'wispy' && z > 0.1) {
       const slit = Math.abs(((x * 11 + 50.25) % 1) - 0.5) / 11 - 0.006;
@@ -138,7 +166,7 @@ export function hairGeometry(c) {
   if (CACHE.has(key)) return CACHE.get(key);
   const sdf = makeHairSDF(c);
   const low = TAILS[c.hairStyle] || ['long', 'wavy', 'braids'].includes(c.hairStyle) ? -0.66 : -0.3;
-  const flat = polygonize(sdf, V(-0.42, low, -0.46), V(0.42, 0.42, 0.38), 0.0125);
+  const flat = polygonize(sdf, V(-0.48, low, -0.56), V(0.48, 0.44, 0.38), 0.0125);
   const { P, N, index } = buildGeometry(sdf, flat);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(P, 3));
@@ -158,6 +186,12 @@ export function hairGeometry(c) {
 
 // 髮圈 / 髮飾的位置（給 avatar.js 加小裝飾用）
 export function tieSpots(c) {
-  if (c.hairStyle === 'braids') return BRAIDS.map(b => b[b.length - 1][0].clone().add(V(0, -0.03, 0)));
-  return (TAILS[c.hairStyle] || []).map(t => t[0]);
+  if (c.hairStyle === 'braids') return BRAIDS.map(b => ({ p: b[b.length - 1][0].clone().add(V(0, -0.03, 0)), dir: V(0, 1, 0), r: 0.03 }));
+  const hatted = ['fluffy', 'beanie', 'hood', 'cap', 'beret', 'straw'].includes(c.hat);
+  return (TAILS[c.hairStyle] || []).map(t => {
+    if (hatted && c.hairStyle === 'ponytail') t = [V(0, 0.02, -0.29), V(0, -0.12, -0.38)];
+    const dir = t[1].clone().sub(t[0]).normalize();
+    // 髮圈綁在離頭皮一點點的地方
+    return { p: t[0].clone().addScaledVector(dir, 0.06), dir, r: 0.058 };
+  });
 }

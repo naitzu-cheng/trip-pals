@@ -3,8 +3,8 @@
 // 頭和頭髮用距離場捏出來；臉是用 Canvas 畫出來的貼圖
 // 座標：Y 朝上、腳底在 y=0、臉朝 +Z，總高約 1
 import * as THREE from 'three';
-import { hairGeometry, tieSpots } from './hair.js';
-import { headGeometries, maskGeometry } from './sdf.js';
+import { hairGeometry, tieSpots, EAR } from './hair.js';
+import { headGeometries, maskGeometry, faceSurface, headSDF } from './sdf.js';
 
 export const DEFAULT_AVATAR = {
   skin: '#ffe3d3',
@@ -302,8 +302,8 @@ export function buildAvatar(cfg = {}) {
   body.add(head);
   head.add(new THREE.Mesh(headGeometries().head, skin));
   for (const side of [-1, 1]) {
-    head.add(mesh(sphere(0.055), skin, [side * 0.282, -0.05, -0.02], [0.45, 1, 0.78], [0, side * -0.35, side * -0.12]));
-    head.add(mesh(sphere(0.03), skinMat(shade(c.skin, -0.06)), [side * 0.3, -0.048, 0.0], [0.25, 1, 0.7], [0, side * -0.35, side * -0.12]));
+    head.add(mesh(sphere(0.072), skin, [side * EAR.x, EAR.y, EAR.z], [0.42, 1, 0.8], [0, side * -0.45, side * -0.15]));
+    head.add(mesh(sphere(0.04), skinMat(shade(c.skin, -0.08)), [side * (EAR.x + 0.02), EAR.y + 0.003, EAR.z + 0.02], [0.22, 0.9, 0.65], [0, side * -0.45, side * -0.15]));
   }
   const face = addFace(head, c);
   if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.075, 0.262], [1.35, 0.85, 0.7]));
@@ -711,14 +711,51 @@ function addBottomDetails(body, c) {
   }
 }
 
+function strandMaterial(color) {
+  const m = vinyl(color, { roughness: 0.6, vertexColors: true });
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vHairPos;
+varying vec3 vAxisX;
+varying vec3 vAxisZ;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+vHairPos = position;
+vAxisX = normalize((modelViewMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xyz);
+vAxisZ = normalize((modelViewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vHairPos;
+varying vec3 vAxisX;
+varying vec3 vAxisZ;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+{
+  float a = atan(vHairPos.x, vHairPos.z);
+  float r = max(length(vHairPos.xz), 0.05);
+  float fade = clamp((r - 0.06) / 0.14, 0.0, 1.0);
+  float w = a + sin(vHairPos.y * 9.0) * 0.05;
+  float dh = cos(w * 60.0) * 60.0 * 0.5 + cos(w * 121.0 + 1.7) * 121.0 * 0.25 + cos(w * 187.0 + 0.4) * 187.0 * 0.12;
+  dh *= 0.0011 * fade / r;
+  vec3 tView = normalize(vAxisX * cos(a) - vAxisZ * sin(a));
+  normal = normalize(normal - tView * dh);
+}`);
+  };
+  m.customProgramCacheKey = () => 'hair-strands';
+  return m;
+}
+
 function addHair(head, c) {
   const s = c.hairStyle;
   const geo = hairGeometry(c);
   if (!geo) return;
   const hair = vinyl(c.hair, { roughness: 0.62 });
-  head.add(new THREE.Mesh(geo, vinyl(c.hair, { roughness: 0.62, vertexColors: true })));
+  head.add(new THREE.Mesh(geo, strandMaterial(c.hair)));
   // 髮圈
-  for (const p of tieSpots(c)) head.add(mesh(torus(0.05, 0.016), vinyl(shade(c.hair, -0.3), { roughness: 0.3 }), [p.x, p.y, p.z], [1, 1, 1], [Math.PI / 2 - 0.4, 0, 0]));
+  for (const { p, dir, r } of tieSpots(c)) {
+    const band = mesh(cyl(r, r, 0.028, 24), vinyl(shade(c.hair, -0.35), { roughness: 0.3 }), [p.x, p.y, p.z]);
+    band.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    head.add(band);
+  }
   if ((s === 'messy' || s === 'spiky') && c.hat === 'none') {
     const n = s === 'spiky' ? 8 : 6;
     for (let i = 0; i < n; i++) {
@@ -800,8 +837,8 @@ function addHat(parent, c) {
     head.add(mesh(fluffy(torus(0.27, 0.04, Math.PI * 2, 48)), fur(shade(c.hatColor, 0.08)), [0, 0.02, 0.1], [1.12, 1.08, 1], [-0.42 + Math.PI * 0.12, 0, 0]));
     addAnimalEars(head, c.ears === 'none' ? 'bunny' : c.ears, fabric(c.hatColor), 1.2, true);
   } else if (c.hat === 'cap') {
-    head.add(mesh(new THREE.SphereGeometry(0.305, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), m, [0, 0.06, 0], [1.07, 0.86, 1.03]));
-    head.add(mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.018, 24, 1, false, -Math.PI / 2, Math.PI), m, [0, 0.07, 0.2], [1, 1, 1.1]));
+    head.add(mesh(new THREE.SphereGeometry(0.31, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), m, [0, 0.04, -0.005], [1.07, 0.98, 1.05]));
+    head.add(mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.018, 24, 1, false, -Math.PI / 2, Math.PI), m, [0, -0.005, 0.24], [1, 1, 1.1], [0.12, 0, 0]));
   } else if (c.hat === 'beanie') {
     head.add(mesh(new THREE.SphereGeometry(0.315, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.55), m, [0, 0.04, -0.01], [1.08, 1.02, 1.04], [-0.2, 0, 0]));
     head.add(mesh(torus(0.3, 0.04), fabric(shade(c.hatColor, -0.1)), [0, 0.03, 0.0], [1.08, 1.04, 1], [Math.PI / 2 - 0.2, 0, 0]));
@@ -820,15 +857,29 @@ function addHat(parent, c) {
 function addGlasses(head, c) {
   if (c.glasses === 'none') return;
   const frame = vinyl(c.glasses === 'sun' ? '#1a1a1a' : '#6b4a2b', { roughness: 0.3 });
+  const R = 0.068, y = -0.05;
   for (const side of [-1, 1]) {
+    const x = side * 0.108;
+    const { z, n } = faceSurface(x, y);
     const g = new THREE.Group();
-    g.position.set(side * 0.105, -0.045, 0.262);
-    g.rotation.y = side * 0.32;
-    g.add(mesh(torus(0.068, 0.009), frame));
-    if (c.glasses === 'sun') g.add(mesh(new THREE.CircleGeometry(0.068, 32), basic('#111', { transparent: true, opacity: 0.82 })));
+    g.position.set(x, y, z + 0.022);
+    g.rotation.y = Math.atan2(n.x, n.z) * 0.8;
+    g.add(mesh(torus(R, 0.009), frame));
+    if (c.glasses === 'sun') g.add(mesh(new THREE.CircleGeometry(R, 32), basic('#111', { transparent: true, opacity: 0.82 })));
     head.add(g);
+    // 鏡腳：從鏡框外側往後接到耳朵
+    const from = new THREE.Vector3(side * (0.108 + R * 0.95), y + 0.012, z + 0.005);
+    const ty = EAR.y + 0.05, tz = EAR.z + 0.02;
+    let sx = 0.2;
+    while (sx < 0.4 && headSDF(sx, ty, tz) < 0.008) sx += 0.002; // 鏡腳尾端停在頭的表面外
+    const to = new THREE.Vector3(side * sx, ty, tz);
+    const len = from.distanceTo(to);
+    const arm = mesh(box(0.008, 0.008, len), frame, [(from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2]);
+    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), to.clone().sub(from).normalize());
+    head.add(arm);
   }
-  head.add(mesh(box(0.05, 0.012, 0.012), frame, [0, -0.03, 0.272]));
+  const { z: zb } = faceSurface(0, -0.035);
+  head.add(mesh(box(0.05, 0.01, 0.01), frame, [0, -0.035, zb + 0.022]));
 }
 
 function addAccessories(body, c) {

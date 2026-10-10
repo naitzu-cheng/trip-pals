@@ -2,7 +2,7 @@
 // 身體用基本幾何體 + 旋轉曲面組成；臉是用 Canvas 畫出來的貼圖（大眼睛、腮紅、嘴巴）
 // 座標：Y 朝上、腳底在 y=0、臉朝 +Z，總高約 1
 import * as THREE from 'three';
-import { makeSkeleton, skinned, skinnedLathe, attach, animate, bodyGeometry, shell } from './body.js';
+import { makeSkeleton, skinned, skinnedLathe, attach, animate, bodyGeometry, shell, headGeometries, maskGeometry } from './body.js';
 
 export const DEFAULT_AVATAR = {
   skin: '#ffe0cc',
@@ -150,8 +150,8 @@ const rgba = (hex, a) => {
 };
 
 const SLEEVES = { tee: 'short', tank: 'none', shirt: 'long', hoodie: 'long', sweater: 'long', jacket: 'long', coat: 'long', dress: 'short', yukata: 'long' };
-const HEAD_SCALE = 0.685; // 頭部零件原本以半徑 0.27 設計，縮到身體比例
-const HEAD_Y = 0.765;
+const HEAD_SCALE = 0.85; // 頭部零件以「半徑 0.27 的頭」設計，縮放到二頭身比例（頭約佔身高一半）
+const HEAD_Y = 0.6;
 
 // 舊版設定相容
 export function normalize(cfg) {
@@ -175,7 +175,7 @@ export function buildAvatar(cfg = {}) {
   const add = (geo, mat) => { const m = skinned(geo, mat, rig); root.add(m); return m; };
 
   // 影子
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.2, 32), basic(0x000000, { transparent: true, opacity: 0.2, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.22, 32), basic(0x000000, { transparent: true, opacity: 0.2, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.003;
   root.add(shadow);
@@ -196,13 +196,13 @@ export function buildAvatar(cfg = {}) {
     else if (c.bottomStyle === 'shorts') { add(shell('shorts', 0.004), bottom); add(shell('waist', 0.004), bottom); }
     else if (c.bottomStyle === 'ninja') {
       add(shell('pants', 0.014), bottom); add(shell('waist', 0.006), bottom);
-      for (const s of ['L', 'R']) attach(rig, 'lowerLeg' + s, mesh(cyl(0.026, 0.026, 0.02), fabric(shade(c.bottom, -0.15)), [s === 'L' ? 0.06 : -0.06, 0.075, -0.003]));
+      for (const s of ['L', 'R']) attach(rig, 'lowerLeg' + s, mesh(cyl(0.031, 0.031, 0.018), fabric(shade(c.bottom, -0.15)), [s === 'L' ? 0.051 : -0.051, 0.05, -0.003]));
     } else if (c.bottomStyle === 'skirt') {
       add(shell('waist', 0.004), bottom);
-      root.add(skinnedLathe([[0.0001, 0.285], [0.125, 0.285], [0.12, 0.3], [0.088, 0.39], [0.07, 0.43], [0.0001, 0.44]], 'hips', bottom, rig));
+      root.add(skinnedLathe([[0.0001, 0.13], [0.135, 0.13], [0.132, 0.145], [0.104, 0.22], [0.092, 0.265], [0.0001, 0.275]], 'hips', bottom, rig));
     } else if (c.bottomStyle === 'longskirt') {
       add(shell('waist', 0.004), bottom);
-      root.add(skinnedLathe([[0.0001, 0.08], [0.14, 0.08], [0.135, 0.1], [0.09, 0.33], [0.07, 0.43], [0.0001, 0.44]], 'hips', bottom, rig));
+      root.add(skinnedLathe([[0.0001, 0.035], [0.145, 0.035], [0.142, 0.05], [0.108, 0.2], [0.092, 0.265], [0.0001, 0.275]], 'hips', bottom, rig));
     }
   }
 
@@ -223,16 +223,18 @@ export function buildAvatar(cfg = {}) {
   head.position.set(0, HEAD_Y, 0);
   head.scale.setScalar(HEAD_SCALE);
   attach(rig, 'head', head);
-  head.add(mesh(sphere(0.27, 48, 32), skin, [0, 0, 0], [1.07, 0.96, 0.97]));
+  head.add(new THREE.Mesh(headGeometries().head, skin));
   for (const side of [-1, 1]) head.add(mesh(sphere(0.045), skin, [side * 0.285, -0.02, -0.01], [0.5, 1, 0.8]));
   const face = addFace(head, c);
-  if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.045, 0.255], [1.35, 0.85, 0.7]));
+  if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.072, 0.248], [1.35, 0.85, 0.7]));
   addHair(head, c);
   addEars(head, c);
   addHat(head, c);
   addGlasses(head, c);
   if (c.scarf === 'mask') {
-    head.add(mesh(new THREE.SphereGeometry(0.283, 48, 16, 0, Math.PI * 2, Math.PI * 0.53, Math.PI * 0.3), fabric(c.scarfColor), [0, 0, 0], [1.08, 0.97, 0.98]));
+    const mk = new THREE.Mesh(maskGeometry(), fabric(c.scarfColor));
+    mk.material.side = THREE.DoubleSide;
+    head.add(mk);
   }
   addAccessories(root, rig, c);
 
@@ -265,8 +267,7 @@ function addFace(head, c) {
     polygonOffset: true, polygonOffsetFactor: -2,
   });
   material.userData.maps = [open, shut];
-  const geo = new THREE.SphereGeometry(0.2715, 64, 32, Math.PI / 2 - PHI / 2, PHI, Math.PI / 2 - THETA / 2, THETA);
-  const m = mesh(geo, material, [0, 0, 0], [1.07, 0.96, 0.97]);
+  const m = new THREE.Mesh(headGeometries().face, material);
   m.renderOrder = 2;
   head.add(m);
   let state = false;
@@ -296,7 +297,7 @@ function faceTexture(c, blink) {
   // 腮紅
   if (c.blush) {
     for (const side of [-1, 1]) {
-      const x = fx(side * 35), y = fy(-14);
+      const x = fx(side * 36), y = fy(-20);
       const grd = g.createRadialGradient(x, y, 0, x, y, 70);
       grd.addColorStop(0, 'rgba(255,120,140,0.55)');
       grd.addColorStop(1, 'rgba(255,120,140,0)');
@@ -312,7 +313,7 @@ function faceTexture(c, blink) {
     let kind = c.eyes;
     if (kind === 'wink') kind = side > 0 ? 'happy' : 'sparkle';
     if (blink && !['happy', 'sleepy'].includes(kind)) kind = 'closed';
-    drawEye(g, fx(side * 22.5), fy(-5), side, kind, c.eyeColor);
+    drawEye(g, fx(side * 23), fy(-10), side, kind, c.eyeColor);
   }
 
   // 眉毛
@@ -320,7 +321,7 @@ function faceTexture(c, blink) {
     g.strokeStyle = shade(c.hair, -0.12);
     g.lineWidth = c.brows === 'thick' ? 15 : 8;
     for (const side of [-1, 1]) {
-      const x = fx(side * 22.5), y = fy(16.5);
+      const x = fx(side * 23), y = fy(11.5);
       const tilt = c.brows === 'worried' ? -14 : c.brows === 'angry' ? 14 : 0;
       g.beginPath();
       g.moveTo(x - side * 34, y + tilt * side * side);
@@ -332,17 +333,17 @@ function faceTexture(c, blink) {
   // 鼻子
   if (c.nose === 'dot') {
     g.fillStyle = rgba(shade(c.skin, -0.3), 0.7);
-    g.beginPath(); g.ellipse(fx(0), fy(-10), 6, 4, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(fx(0), fy(-16), 6, 4, 0, 0, Math.PI * 2); g.fill();
   } else if (c.nose === 'button') {
-    const grd = g.createRadialGradient(fx(0), fy(-10), 0, fx(0), fy(-10), 18);
+    const grd = g.createRadialGradient(fx(0), fy(-16), 0, fx(0), fy(-16), 18);
     grd.addColorStop(0, rgba(shade(c.skin, -0.18), 0.9));
     grd.addColorStop(1, rgba(shade(c.skin, -0.18), 0));
     g.fillStyle = grd;
-    g.beginPath(); g.arc(fx(0), fy(-10), 18, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(fx(0), fy(-16), 18, 0, Math.PI * 2); g.fill();
   }
 
   // 嘴巴
-  drawMouth(g, fx(0), fy(-21), c.mouth);
+  drawMouth(g, fx(0), fy(-26), c.mouth);
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -491,20 +492,20 @@ function drawMouth(g, x, y, kind) {
 
 /* ---------------- 身體細節（座標都用靜止姿勢的世界座標） ---------------- */
 function addShoe(rig, s, c) {
-  const x = s === 'L' ? 0.06 : -0.06;
+  const x = s === 'L' ? 0.051 : -0.051;
   const shoe = vinyl(c.shoes);
   const g = new THREE.Group();
   if (c.shoeStyle === 'boots' || c.shoeStyle === 'furboots') {
-    g.add(mesh(cyl(0.03, 0.029, 0.065), shoe, [x, 0.058, -0.002]));
-    g.add(mesh(sphere(0.031), shoe, [x, 0.022, 0.02], [1, 0.8, 1.75]));
-    g.add(mesh(sphere(0.032), vinyl(shade(c.shoes, -0.25)), [x, 0.008, 0.02], [1.03, 0.3, 1.78]));
-    if (c.shoeStyle === 'furboots') g.add(mesh(fluffy(torus(0.031, 0.014), 0.006, 120), fur('#fffaf0'), [x, 0.09, -0.002], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    g.add(mesh(cyl(0.034, 0.033, 0.05), shoe, [x, 0.045, -0.002]));
+    g.add(mesh(sphere(0.035), shoe, [x, 0.02, 0.016], [1, 0.72, 1.4]));
+    g.add(mesh(sphere(0.036), vinyl(shade(c.shoes, -0.25)), [x, 0.007, 0.016], [1.03, 0.28, 1.43]));
+    if (c.shoeStyle === 'furboots') g.add(mesh(fluffy(torus(0.035, 0.015), 0.006, 120), fur('#fffaf0'), [x, 0.07, -0.002], [1, 1, 1], [Math.PI / 2, 0, 0]));
   } else if (c.shoeStyle === 'sandals') {
-    g.add(mesh(box(0.05, 0.01, 0.1), shoe, [x, 0.004, 0.02]));
-    g.add(mesh(torus(0.026, 0.005, Math.PI), shoe, [x, 0.012, 0.035], [1, 1, 1], [0, Math.PI / 2, 0]));
+    g.add(mesh(box(0.06, 0.01, 0.095), shoe, [x, 0.004, 0.016]));
+    g.add(mesh(torus(0.03, 0.006, Math.PI), shoe, [x, 0.012, 0.03], [1, 1, 1], [0, Math.PI / 2, 0]));
   } else {
-    g.add(mesh(sphere(0.034), shoe, [x, 0.026, 0.02], [1, 0.82, 1.7]));
-    g.add(mesh(sphere(0.035), vinyl('#f1f3f5'), [x, 0.01, 0.02], [1.05, 0.34, 1.75]));
+    g.add(mesh(sphere(0.035), shoe, [x, 0.022, 0.016], [1, 0.75, 1.4]));
+    g.add(mesh(sphere(0.036), vinyl('#f1f3f5'), [x, 0.008, 0.016], [1.05, 0.3, 1.45]));
   }
   attach(rig, 'foot' + s, g);
 }
@@ -513,36 +514,38 @@ function addTopDetails(root, rig, c) {
   const s = c.topStyle;
   const top = fabric(c.top), darker = fabric(shade(c.top, -0.1)), lighter = fabric(shade(c.top, 0.22));
   const on = (bone, obj) => attach(rig, bone, obj);
+  // 胸前表面大約的 z（肚子比較凸）
+  const fz = y => (y > 0.33 ? 0.066 : y > 0.29 ? 0.066 + (0.33 - y) * 0.45 : 0.086);
   if (s === 'hoodie') {
-    on('chest', mesh(torus(0.05, 0.02), top, [0, 0.572, -0.032], [1, 0.75, 1], [-0.3, 0, 0]));
-    on('spine', mesh(box(0.08, 0.03, 0.01), darker, [0, 0.425, 0.052]));
-    for (const x of [-0.015, 0.015]) on('chest', mesh(cyl(0.002, 0.002, 0.05, 6), fabric('#ffffff'), [x, 0.535, 0.06]));
+    on('chest', mesh(torus(0.055, 0.022), top, [0, 0.39, -0.045], [1, 0.75, 1], [-0.3, 0, 0]));
+    on('spine', mesh(box(0.085, 0.032, 0.01), darker, [0, 0.255, 0.092]));
+    for (const x of [-0.016, 0.016]) on('chest', mesh(cyl(0.002, 0.002, 0.045, 6), fabric('#ffffff'), [x, 0.355, fz(0.355) + 0.006]));
   } else if (s === 'shirt') {
-    for (const side of [-1, 1]) on('chest', mesh(box(0.04, 0.012, 0.025), lighter, [side * 0.02, 0.572, 0.034], [1, 1, 1], [0.5, 0, side * -0.5]));
-    for (let i = 0; i < 3; i++) on('chest', mesh(sphere(0.0055, 10, 8), vinyl('#ffffff'), [0, 0.53 - i * 0.035, 0.06]));
+    for (const side of [-1, 1]) on('chest', mesh(box(0.042, 0.012, 0.028), lighter, [side * 0.022, 0.392, 0.05], [1, 1, 1], [0.5, 0, side * -0.5]));
+    for (const y of [0.355, 0.32, 0.285]) on('chest', mesh(sphere(0.006, 10, 8), vinyl('#ffffff'), [0, y, fz(y) + 0.005]));
   } else if (s === 'sweater') {
-    on('chest', mesh(fluffy(torus(0.034, 0.016), 0.005, 140), fur('#ffffff'), [0, 0.575, 0.002], [1, 1, 1], [Math.PI / 2, 0, 0]));
-    for (let i = 0; i < 3; i++) on('chest', mesh(sphere(0.01, 16, 12), vinyl('#ffffff'), [0, 0.525 - i * 0.035, 0.06], [1, 1, 0.6]));
+    on('chest', mesh(fluffy(torus(0.04, 0.018), 0.005, 140), fur('#ffffff'), [0, 0.395, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    for (const y of [0.35, 0.31, 0.27]) on('chest', mesh(sphere(0.011, 16, 12), vinyl('#ffffff'), [0, y, fz(y) + 0.005], [1, 1, 0.6]));
   } else if (s === 'jacket') {
-    on('chest', mesh(box(0.03, 0.12, 0.006), fabric('#f8f9fa'), [0, 0.5, 0.058]));
-    for (const side of [-1, 1]) on('chest', mesh(box(0.016, 0.06, 0.008), darker, [side * 0.025, 0.54, 0.057], [1, 1, 1], [0, 0, side * 0.35]));
+    on('chest', mesh(box(0.032, 0.1, 0.006), fabric('#f8f9fa'), [0, 0.335, 0.071]));
+    for (const side of [-1, 1]) on('chest', mesh(box(0.016, 0.05, 0.008), darker, [side * 0.026, 0.37, 0.068], [1, 1, 1], [0, 0, side * 0.35]));
   } else if (s === 'coat') {
-    root.add(skinnedLathe([[0.0001, 0.2], [0.13, 0.2], [0.128, 0.215], [0.098, 0.33], [0.082, 0.41], [0.0001, 0.42]], 'hips', top, rig));
-    on('hips', mesh(fluffy(torus(0.128, 0.016), 0.006, 110), fur('#ffffff'), [0, 0.205, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(fluffy(torus(0.04, 0.022), 0.006, 120), fur('#ffffff'), [0, 0.578, 0.004], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    root.add(skinnedLathe([[0.0001, 0.11], [0.135, 0.11], [0.133, 0.125], [0.11, 0.21], [0.098, 0.27], [0.0001, 0.28]], 'hips', top, rig));
+    on('hips', mesh(fluffy(torus(0.133, 0.017), 0.006, 110), fur('#ffffff'), [0, 0.115, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    on('chest', mesh(fluffy(torus(0.046, 0.024), 0.006, 120), fur('#ffffff'), [0, 0.397, 0.004], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
     for (const side of [-1, 1]) {
-      on('hips', mesh(box(0.045, 0.035, 0.008), darker, [side * 0.055, 0.285, 0.1], [1, 1, 1], [-0.25, side * 0.45, 0]));
-      on('lowerArm' + (side > 0 ? 'L' : 'R'), mesh(fluffy(torus(0.025, 0.012), 0.005, 140), fur('#ffffff'),
-        [side * 0.2, 0.432, 0], [1, 1, 1], [Math.PI / 2, 0, side * 0.8]));
+      on('hips', mesh(box(0.045, 0.035, 0.008), darker, [side * 0.06, 0.19, 0.11], [1, 1, 1], [-0.25, side * 0.45, 0]));
+      on('lowerArm' + (side > 0 ? 'L' : 'R'), mesh(fluffy(torus(0.028, 0.013), 0.005, 140), fur('#ffffff'),
+        [side * 0.144, 0.255, 0], [1, 1, 1], [Math.PI / 2, 0, side * 0.5]));
     }
-    for (let i = 0; i < 2; i++) on('chest', mesh(sphere(0.01, 16, 12), vinyl(shade(c.top, -0.25)), [0.015, 0.52 - i * 0.045, 0.066], [1, 1, 0.6]));
+    for (const y of [0.35, 0.3]) on('chest', mesh(sphere(0.011, 16, 12), vinyl(shade(c.top, -0.25)), [0.016, y, fz(y) + 0.012], [1, 1, 0.6]));
   } else if (s === 'yukata') {
-    root.add(skinnedLathe([[0.0001, 0.04], [0.108, 0.04], [0.108, 0.06], [0.09, 0.3], [0.072, 0.43], [0.0001, 0.44]], 'hips', top, rig));
-    on('spine', mesh(cyl(0.073, 0.073, 0.042, 32), fabric(c.bottom), [0, 0.43, 0], [1, 1, 0.82]));
-    for (const side of [-1, 1]) on('chest', mesh(box(0.012, 0.075, 0.006), fabric('#ffffff'), [side * 0.016, 0.535, 0.058], [1, 1, 1], [0, 0, side * 0.5]));
+    root.add(skinnedLathe([[0.0001, 0.02], [0.112, 0.02], [0.112, 0.04], [0.1, 0.2], [0.094, 0.28], [0.0001, 0.29]], 'hips', top, rig));
+    on('spine', mesh(cyl(0.095, 0.095, 0.045, 32), fabric(c.bottom), [0, 0.285, 0.006], [1, 1, 0.92]));
+    for (const side of [-1, 1]) on('chest', mesh(box(0.013, 0.07, 0.006), fabric('#ffffff'), [side * 0.016, 0.36, 0.07], [1, 1, 1], [0, 0, side * 0.5]));
   } else if (s === 'dress') {
-    root.add(skinnedLathe([[0.0001, 0.25], [0.14, 0.25], [0.136, 0.27], [0.088, 0.4], [0.07, 0.45], [0.0001, 0.46]], 'hips', top, rig));
-    on('chest', mesh(torus(0.035, 0.008), lighter, [0, 0.572, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    root.add(skinnedLathe([[0.0001, 0.12], [0.145, 0.12], [0.142, 0.14], [0.11, 0.23], [0.086, 0.33], [0.0001, 0.34]], 'hips', top, rig));
+    on('chest', mesh(torus(0.04, 0.009), lighter, [0, 0.392, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
   }
 }
 
@@ -703,13 +706,13 @@ function addGlasses(head, c) {
   const frame = vinyl(c.glasses === 'sun' ? '#1a1a1a' : '#6b4a2b', { roughness: 0.3 });
   for (const side of [-1, 1]) {
     const g = new THREE.Group();
-    g.position.set(side * 0.1, -0.015, 0.262);
+    g.position.set(side * 0.105, -0.045, 0.262);
     g.rotation.y = side * 0.32;
     g.add(mesh(torus(0.068, 0.009), frame));
     if (c.glasses === 'sun') g.add(mesh(new THREE.CircleGeometry(0.068, 32), basic('#111', { transparent: true, opacity: 0.82 })));
     head.add(g);
   }
-  head.add(mesh(box(0.05, 0.012, 0.012), frame, [0, 0, 0.276]));
+  head.add(mesh(box(0.05, 0.012, 0.012), frame, [0, -0.03, 0.272]));
 }
 
 function addAccessories(root, rig, c) {
@@ -717,33 +720,32 @@ function addAccessories(root, rig, c) {
   if (c.backpack !== 'none') {
     const bp = vinyl(c.backpackColor);
     if (c.backpack === 'bunny') {
-      on('chest', mesh(sphere(0.085), bp, [0, 0.47, -0.1], [1, 1.05, 0.62]));
-      on('chest', mesh(sphere(0.045), vinyl('#ffffff'), [0, 0.46, -0.148], [1, 1, 0.5]));
+      on('chest', mesh(sphere(0.08), bp, [0, 0.29, -0.115], [1, 1.05, 0.62]));
+      on('chest', mesh(sphere(0.042), vinyl('#ffffff'), [0, 0.28, -0.16], [1, 1, 0.5]));
       for (const side of [-1, 1]) {
-        on('chest', mesh(capsule(0.02, 0.06), bp, [side * 0.035, 0.575, -0.1], [1, 1, 0.6], [0, 0, side * -0.25]));
-        on('chest', mesh(sphere(0.006), vinyl('#2b2b2b'), [side * 0.016, 0.475, -0.17]));
+        on('chest', mesh(capsule(0.019, 0.055), bp, [side * 0.034, 0.39, -0.115], [1, 1, 0.6], [0, 0, side * -0.25]));
+        on('chest', mesh(sphere(0.006), vinyl('#2b2b2b'), [side * 0.015, 0.295, -0.18]));
       }
     } else {
-      on('chest', mesh(box(0.15, 0.15, 0.065), bp, [0, 0.475, -0.09]));
-      on('chest', mesh(box(0.115, 0.055, 0.02), vinyl(shade(c.backpackColor, -0.12)), [0, 0.44, -0.128]));
-      on('chest', mesh(sphere(0.075, 24, 12), bp, [0, 0.548, -0.09], [1, 0.32, 0.45]));
+      on('chest', mesh(box(0.14, 0.13, 0.06), bp, [0, 0.3, -0.105]));
+      on('chest', mesh(box(0.105, 0.05, 0.02), vinyl(shade(c.backpackColor, -0.12)), [0, 0.27, -0.142]));
+      on('chest', mesh(sphere(0.07, 24, 12), bp, [0, 0.365, -0.105], [1, 0.32, 0.45]));
     }
-    for (const side of [-1, 1]) on('chest', mesh(box(0.014, 0.12, 0.006), vinyl(shade(c.backpackColor, -0.2)), [side * 0.042, 0.495, 0.061]));
+    for (const side of [-1, 1]) on('chest', mesh(box(0.014, 0.1, 0.006), vinyl(shade(c.backpackColor, -0.2)), [side * 0.04, 0.335, 0.071]));
   }
   if (c.scarf === 'scarf') {
     const sc = fabric(c.scarfColor);
-    on('chest', mesh(torus(0.038, 0.02), sc, [0, 0.578, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(box(0.03, 0.085, 0.012), sc, [0.03, 0.525, 0.062], [1, 1, 1], [0.1, 0, 0.12]));
+    on('chest', mesh(torus(0.046, 0.021), sc, [0, 0.398, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    on('chest', mesh(box(0.03, 0.075, 0.012), sc, [0.032, 0.35, 0.076], [1, 1, 1], [0.1, 0, 0.12]));
   } else if (c.scarf === 'mask') {
     const sc = fabric(c.scarfColor);
-    on('neck', mesh(torus(0.032, 0.02), sc, [0, 0.6, 0], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
-    for (const side of [-1, 1]) on('neck', mesh(box(0.025, 0.11, 0.006), sc, [side * 0.025, 0.6, -0.09], [1, 1, 1], [0.8, 0, side * 0.3]));
+    for (const side of [-1, 1]) on('neck', mesh(box(0.025, 0.11, 0.006), sc, [side * 0.028, 0.44, -0.19], [1, 1, 1], [0.7, 0, side * 0.3]));
   }
   if (c.camera) {
-    on('chest', mesh(torus(0.068, 0.0045, Math.PI), vinyl('#343a40'), [0, 0.565, 0.062], [0.75, 1, 1], [0, 0, Math.PI]));
-    on('chest', mesh(box(0.06, 0.04, 0.028), vinyl('#495057'), [0, 0.49, 0.077]));
-    on('chest', mesh(cyl(0.013, 0.013, 0.018, 16), vinyl('#212529'), [0, 0.49, 0.096], [1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(sphere(0.006, 8, 6), vinyl('#74c0fc', { roughness: 0.1 }), [0, 0.49, 0.105]));
+    on('chest', mesh(torus(0.07, 0.0045, Math.PI), vinyl('#343a40'), [0, 0.392, 0.07], [0.75, 1, 1], [0, 0, Math.PI]));
+    on('chest', mesh(box(0.06, 0.04, 0.028), vinyl('#495057'), [0, 0.31, 0.09]));
+    on('chest', mesh(cyl(0.013, 0.013, 0.018, 16), vinyl('#212529'), [0, 0.31, 0.109], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    on('chest', mesh(sphere(0.006, 8, 6), vinyl('#74c0fc', { roughness: 0.1 }), [0, 0.31, 0.118]));
   }
 }
 

@@ -51,18 +51,18 @@ const SEGMENTS = [
 const BONE_INDEX = Object.fromEntries(BONES.map(([n], i) => [n, i]));
 
 /* ---------------- 距離場 ---------------- */
-function smin(a, b, k) {
+export function smin(a, b, k) {
   const h = Math.max(k - Math.abs(a - b), 0) / k;
   return Math.min(a, b) - h * h * k * 0.25;
 }
-function ellipsoid(px, py, pz, cx, cy, cz, rx, ry, rz) {
+export function ellipsoid(px, py, pz, cx, cy, cz, rx, ry, rz) {
   const x = (px - cx) / rx, y = (py - cy) / ry, z = (pz - cz) / rz;
   const k0 = Math.sqrt(x * x + y * y + z * z);
   const k1 = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2 + (z / rz) ** 2);
   return k1 === 0 ? -Math.min(rx, ry, rz) : (k0 * (k0 - 1)) / k1;
 }
 // 兩端半徑不同的膠囊（iq 的 round cone）
-function roundCone(px, py, pz, a, b, r1, r2) {
+export function roundCone(px, py, pz, a, b, r1, r2) {
   const bax = b.x - a.x, bay = b.y - a.y, baz = b.z - a.z;
   const l2 = bax * bax + bay * bay + baz * baz, rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1 / l2;
   const pax = px - a.x, pay = py - a.y, paz = pz - a.z;
@@ -95,10 +95,11 @@ function bodySDF(x, y, z) {
 }
 
 // 頭：不是球！頭頂圓、兩頰鼓起、下巴小小的（麻糬臉）。單位沿用頭部零件（舊版球半徑 0.27）
-function headSDF(x, y, z) {
+export function headSDF(x, y, z) {
   let t = ellipsoid(x, y, z, 0, 0.035, -0.015, 0.285, 0.26, 0.27);
-  const s = x >= 0 ? 1 : -1;
-  t = smin(t, ellipsoid(x, y, z, s * 0.12, -0.085, 0.065, 0.155, 0.135, 0.16), 0.09);
+  // 兩邊臉頰都要算（只算一邊會在臉中間留下一條接縫）
+  t = smin(t, ellipsoid(x, y, z, 0.12, -0.085, 0.065, 0.155, 0.135, 0.16), 0.09);
+  t = smin(t, ellipsoid(x, y, z, -0.12, -0.085, 0.065, 0.155, 0.135, 0.16), 0.09);
   t = smin(t, ellipsoid(x, y, z, 0, -0.125, 0.07, 0.15, 0.105, 0.145), 0.08);
   return t;
 }
@@ -107,7 +108,7 @@ function headSDF(x, y, z) {
 const CORNERS = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]];
 const EDGES = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
 
-function polygonize(sdf, min, max, cell) {
+export function polygonize(sdf, min, max, cell) {
   const nx = Math.ceil((max.x - min.x) / cell) + 1, ny = Math.ceil((max.y - min.y) / cell) + 1, nz = Math.ceil((max.z - min.z) / cell) + 1;
   const f = new Float32Array(nx * ny * nz);
   for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -142,7 +143,7 @@ function polygonize(sdf, min, max, cell) {
 }
 
 // 合併重複頂點 → 有索引的網格，法線用距離場的梯度（很平滑）
-function buildGeometry(sdf, flat) {
+export function buildGeometry(sdf, flat) {
   const map = new Map(), P = [], index = [];
   for (let i = 0; i < flat.length; i += 3) {
     const key = `${Math.round(flat[i] * 1e5)},${Math.round(flat[i + 1] * 1e5)},${Math.round(flat[i + 2] * 1e5)}`;

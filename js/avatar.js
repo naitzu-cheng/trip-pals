@@ -2,14 +2,15 @@
 // 身體用基本幾何體 + 旋轉曲面組成；臉是用 Canvas 畫出來的貼圖（大眼睛、腮紅、嘴巴）
 // 座標：Y 朝上、腳底在 y=0、臉朝 +Z，總高約 1
 import * as THREE from 'three';
+import { hairGeometry, tieSpots } from './hair.js';
 import { makeSkeleton, skinned, skinnedLathe, attach, animate, bodyGeometry, shell, headGeometries, maskGeometry } from './body.js';
 
 export const DEFAULT_AVATAR = {
   skin: '#ffe0cc',
   hair: '#6b4433',
-  hairStyle: 'short',
+  hairStyle: 'bob',
   bangs: 'full',
-  eyes: 'sparkle',
+  eyes: 'doll',
   eyeColor: '#5b7fd6',
   brows: 'thin',
   nose: 'dot',
@@ -35,10 +36,11 @@ export const DEFAULT_AVATAR = {
 };
 
 export const OPTIONS = {
-  hairStyle: [['short', '短髮'], ['bob', '鮑伯頭'], ['long', '長髮'], ['wavy', '大波浪'], ['ponytail', '馬尾'],
-    ['pigtails', '雙馬尾'], ['bun', '丸子頭'], ['curly', '捲髮'], ['messy', '亂翹'], ['spiky', '刺蝟頭'], ['bald', '光頭']],
-  bangs: [['full', '齊瀏海'], ['side', '旁分'], ['middle', '中分'], ['wispy', '空氣瀏海'], ['none', '無瀏海']],
-  eyes: [['sparkle', '閃亮大眼'], ['round', '圓眼'], ['lashes', '長睫毛'], ['dot', '豆豆眼'], ['happy', '笑眼'],
+  hairStyle: [['bob', '妹妹頭'], ['short', '短髮'], ['ponytail', '高馬尾'], ['lowtail', '低馬尾'], ['sidetail', '側馬尾'],
+    ['pigtails', '低雙馬尾'], ['buns', '雙丸子'], ['bun', '丸子頭'], ['long', '長髮'], ['wavy', '大波浪'],
+    ['curly', '捲髮'], ['messy', '亂翹'], ['spiky', '刺蝟頭'], ['bald', '光頭']],
+  bangs: [['full', '齊瀏海'], ['wispy', '空氣瀏海'], ['middle', '中分八字'], ['side', '旁分斜瀏海'], ['none', '露額頭']],
+  eyes: [['doll', '娃娃眼'], ['sparkle', '閃亮大眼'], ['round', '圓眼'], ['lashes', '長睫毛'], ['dot', '豆豆眼'], ['happy', '笑眼'],
     ['wink', '眨眼'], ['sleepy', '瞇瞇眼'], ['sharp', '銳利']],
   brows: [['thin', '細眉'], ['thick', '粗眉'], ['worried', '八字眉'], ['angry', '生氣眉'], ['none', '無']],
   nose: [['none', '無'], ['dot', '小點'], ['button', '圓鼻'], ['animal', '動物鼻']],
@@ -158,6 +160,8 @@ export function normalize(cfg) {
   const c = { ...DEFAULT_AVATAR, ...(cfg || {}) };
   if (c.backpack === true) c.backpack = 'square';
   if (c.backpack === false) c.backpack = 'none';
+  if (!OPTIONS.hairStyle.some(o => o[0] === c.hairStyle)) c.hairStyle = 'bob';
+  if (!OPTIONS.bangs.some(o => o[0] === c.bangs)) c.bangs = 'full';
   return c;
 }
 
@@ -224,7 +228,10 @@ export function buildAvatar(cfg = {}) {
   head.scale.setScalar(HEAD_SCALE);
   attach(rig, 'head', head);
   head.add(new THREE.Mesh(headGeometries().head, skin));
-  for (const side of [-1, 1]) head.add(mesh(sphere(0.045), skin, [side * 0.285, -0.02, -0.01], [0.5, 1, 0.8]));
+  for (const side of [-1, 1]) {
+    head.add(mesh(sphere(0.062), skin, [side * 0.282, -0.06, -0.02], [0.45, 1, 0.78], [0, side * -0.35, side * -0.12]));
+    head.add(mesh(sphere(0.034), skinMat(shade(c.skin, -0.06)), [side * 0.302, -0.058, 0.0], [0.25, 1, 0.7], [0, side * -0.35, side * -0.12]));
+  }
   const face = addFace(head, c);
   if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.072, 0.248], [1.35, 0.85, 0.7]));
   addHair(head, c);
@@ -313,7 +320,7 @@ function faceTexture(c, blink) {
     let kind = c.eyes;
     if (kind === 'wink') kind = side > 0 ? 'happy' : 'sparkle';
     if (blink && !['happy', 'sleepy'].includes(kind)) kind = 'closed';
-    drawEye(g, fx(side * 23), fy(-10), side, kind, c.eyeColor);
+    drawEye(g, fx(side * (kind === 'doll' ? 24.5 : 23)), fy(-10), side, kind, c.eyeColor);
   }
 
   // 眉毛
@@ -382,6 +389,45 @@ function drawEye(g, x, y, side, kind, color) {
     return;
   }
 
+  if (kind === 'doll') {
+    const w = W * 0.95, h = H * 0.92;
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.fill();
+    g.save();
+    g.beginPath(); g.ellipse(x, y, w, h, 0, 0, Math.PI * 2); g.clip();
+    const iw = w * 0.8, ih = h * 0.86, icy = y + h * 0.1;
+    const grd = g.createLinearGradient(0, icy - ih, 0, icy + ih);
+    grd.addColorStop(0, shade(color, -0.42));
+    grd.addColorStop(0.5, color);
+    grd.addColorStop(1, shade(color, 0.3));
+    g.fillStyle = grd;
+    g.beginPath(); g.ellipse(x, icy, iw, ih, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = rgba(shade(color, -0.6), 0.95);
+    g.beginPath(); g.ellipse(x, icy + ih * 0.05, iw * 0.45, ih * 0.5, 0, 0, Math.PI * 2); g.fill();
+    const lid = g.createLinearGradient(0, y - h, 0, y - h * 0.1);
+    lid.addColorStop(0, 'rgba(30,20,40,0.55)');
+    lid.addColorStop(1, 'rgba(30,20,40,0)');
+    g.fillStyle = lid;
+    g.fillRect(x - w, y - h, w * 2, h);
+    g.restore();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(x - side * 2 - w * 0.22, y - h * 0.18, w * 0.2, h * 0.17, -0.3, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(x + w * 0.28, y + h * 0.4, w * 0.08, 0, Math.PI * 2); g.fill();
+    // 粗上眼線，外眼角加粗
+    g.strokeStyle = lash;
+    g.lineWidth = 17;
+    g.beginPath(); g.ellipse(x, y, w + 4, h + 4, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+    g.fillStyle = lash;
+    g.beginPath();
+    g.moveTo(x + side * (w - 4), y - h * 0.45);
+    g.quadraticCurveTo(x + side * (w + 22), y - h * 0.5, x + side * (w + 24), y - h * 0.15);
+    g.quadraticCurveTo(x + side * (w + 8), y - h * 0.2, x + side * (w - 2), y - h * 0.05);
+    g.fill();
+    g.strokeStyle = 'rgba(90,50,60,0.4)';
+    g.lineWidth = 4;
+    g.beginPath(); g.ellipse(x, y, w * 0.85, h + 3, 0, Math.PI * 0.28, Math.PI * 0.72); g.stroke();
+    return;
+  }
   const sharp = kind === 'sharp';
   const w = sharp ? W * 1.05 : W, h = sharp ? H * 0.72 : H;
   const cy = sharp ? y + 8 : y;
@@ -551,89 +597,24 @@ function addTopDetails(root, rig, c) {
 
 function addHair(head, c) {
   const s = c.hairStyle;
-  if (s === 'bald') return;
-  const hair = vinyl(c.hair, { roughness: 0.38 });
-  if (s === 'curly' && c.hat !== 'hood') {
-    for (let ti = 0; ti < 5; ti++) {
-      const theta = 0.12 * Math.PI + ti * 0.12 * Math.PI;
-      const n = Math.round(4 + Math.sin(theta) * 9);
-      for (let pi = 0; pi < n; pi++) {
-        const phi = (pi / n) * Math.PI * 2 + ti * 0.4;
-        const x = Math.sin(theta) * Math.cos(phi), y = Math.cos(theta), z = Math.sin(theta) * Math.sin(phi);
-        if (z > 0.35 && y < 0.55) continue;
-        head.add(mesh(sphere(0.088, 16, 12), hair, [x * 0.295, y * 0.28 + 0.02, z * 0.28 - 0.02]));
-      }
-    }
-    head.add(mesh(sphere(0.28), hair, [0, -0.02, -0.07], [1.1, 0.95, 0.92]));
-  } else if (c.hat !== 'hood') {
-    // 戴帽子時省略頭頂那層，避免從帽子穿出來
-    if (!['fluffy', 'beanie'].includes(c.hat)) {
-      head.add(mesh(new THREE.SphereGeometry(0.297, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.5), hair, [0, 0.025, -0.01], [1.08, 1.02, 1.02], [-0.28, 0, 0]));
-    }
-    head.add(mesh(sphere(0.293, 48, 28), hair, [0, 0.0, -0.065], [1.06, 0.97, 0.94]));
-  }
+  const geo = hairGeometry(c);
+  if (!geo) return;
+  const hair = vinyl(c.hair, { roughness: 0.55 });
+  head.add(new THREE.Mesh(geo, hair));
+  // 髮圈
+  for (const p of tieSpots(c)) head.add(mesh(torus(0.05, 0.016), vinyl(shade(c.hair, -0.3), { roughness: 0.3 }), [p.x, p.y, p.z], [1, 1, 1], [Math.PI / 2 - 0.4, 0, 0]));
   if ((s === 'messy' || s === 'spiky') && c.hat === 'none') {
     const n = s === 'spiky' ? 8 : 6;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + 0.3;
       const len = s === 'spiky' ? 0.17 : 0.12;
-      head.add(mesh(teardrop(0.05, len), hair, [Math.cos(a) * 0.17, 0.25, Math.sin(a) * 0.15 - 0.05], [1, 1, 0.8],
+      head.add(mesh(teardrop(0.05, len), hair, [Math.cos(a) * 0.17, 0.27, Math.sin(a) * 0.15 - 0.05], [1, 1, 0.8],
         [Math.PI - Math.sin(a) * 0.9, 0, Math.cos(a) * 0.9]));
     }
   }
-  addBangs(head, c, hair);
-
-  if (s === 'long' || s === 'wavy') {
-    head.add(mesh(capsule(0.21, 0.22), hair, [0, -0.25, -0.12], [1.28, 1, 0.6]));
-    for (const side of [-1, 1]) {
-      if (s === 'wavy') {
-        // 波浪側髮：一串交錯的水滴，尾端捲起
-        for (let i = 0; i < 4; i++) {
-          head.add(mesh(sphere(0.062 - i * 0.004, 20, 14), hair, [side * (0.25 + (i % 2) * 0.03), -0.08 - i * 0.075, 0.0 - i * 0.012]));
-        }
-        head.add(mesh(torus(0.03, 0.016, Math.PI * 1.5), hair, [side * 0.27, -0.39, -0.02], [1, 1, 1], [0, Math.PI / 2, side * 1.2]));
-      } else {
-        head.add(mesh(capsule(0.06, 0.2), hair, [side * 0.245, -0.16, -0.01]));
-      }
-    }
-  } else if (s === 'bob') {
-    head.add(mesh(sphere(0.295), hair, [0, -0.06, -0.04], [1.14, 0.74, 0.86]));
-  } else if (s === 'ponytail') {
-    head.add(mesh(sphere(0.045), vinyl(shade(c.hair, 0.2)), [0, 0.14, -0.28]));
-    head.add(mesh(teardrop(0.075, 0.3), hair, [0, 0.08, -0.33], [1, 1, 0.85], [0.35, 0, 0]));
-  } else if (s === 'bun') {
-    head.add(mesh(sphere(0.11), hair, [0, 0.32, -0.06]));
-  } else if (s === 'pigtails') {
-    for (const side of [-1, 1]) {
-      head.add(mesh(sphere(0.035), vinyl('#ff8fab'), [side * 0.27, 0.06, -0.07]));
-      head.add(mesh(teardrop(0.075, 0.24), hair, [side * 0.31, 0.02, -0.08], [1, 1, 0.9], [0, 0, side * 0.35]));
-    }
-  }
 }
 
-function addBangs(head, c, hair) {
-  const b = c.bangs;
-  const dy = ['hood', 'fluffy', 'beanie'].includes(c.hat) ? -0.055 : 0; // 戴帽子時瀏海露在帽緣下
-  // 瀏海：一撮一撮尖尖的水滴，沿著額頭排列
-  const strand = (angleDeg, y, len, r, tiltZ = 0, tiltX = -0.25) => {
-    const a = (angleDeg * Math.PI) / 180;
-    const x = Math.sin(a) * 0.29 * 1.07, z = Math.cos(a) * 0.26 + 0.005;
-    head.add(mesh(teardrop(r, len), hair, [x, y + dy, z + (dy ? 0.012 : 0)], [1, 1, 0.42], [tiltX, a * 0.9, tiltZ]));
-  };
-  if (b === 'full') {
-    [-54, -40, -27, -14, -1, 12, 25, 38, 51].forEach((a, i) => strand(a, 0.19 - Math.abs(a) * 0.0006, 0.095 + (i % 2) * 0.03, 0.066, -a * 0.005));
-  } else if (b === 'wispy') {
-    [-44, -30, -14, 0, 14, 30, 44].forEach((a, i) => strand(a, 0.185, 0.085 + (i % 3) * 0.025, 0.036, -a * 0.006));
-  } else if (b === 'side') {
-    [-54, -40, -26, -12, 2, 16].forEach((a, i) => strand(a, 0.215 - i * 0.004, 0.1 + i * 0.012, 0.062, 0.6));
-    strand(36, 0.17, 0.14, 0.055, -0.1);
-    strand(50, 0.15, 0.15, 0.05, -0.15);
-  } else if (b === 'middle') {
-    for (const side of [-1, 1]) {
-      [8, 22, 36, 50].forEach((a, i) => strand(side * a, 0.215 - i * 0.012, 0.1 + i * 0.025, 0.06, side * (0.7 - i * 0.15)));
-    }
-  }
-}
+
 
 function addEars(head, c) {
   if (c.ears === 'none' || c.hat === 'hood') return;

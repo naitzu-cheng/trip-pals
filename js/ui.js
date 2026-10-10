@@ -26,7 +26,14 @@ export function toast(msg, ms = 2400) {
 export const errMsg = e => toast('⚠️ ' + (e?.message || e));
 
 /* ---------- 底部彈出視窗 ---------- */
+let openSheets = 0;
 export function Sheet({ title, onClose, children, full }) {
+  // 打開時隱藏底部分頁列，避免擋住「儲存 / 刪除」
+  useEffect(() => {
+    openSheets++;
+    document.body.classList.add('sheet-open');
+    return () => { if (--openSheets === 0) document.body.classList.remove('sheet-open'); };
+  }, []);
   useEffect(() => {
     const k = e => e.key === 'Escape' && onClose?.();
     addEventListener('keydown', k);

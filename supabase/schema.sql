@@ -45,6 +45,7 @@ create table if not exists public.itinerary (
   lng double precision,
   address text,
   note text,
+  position double precision,
   created_at timestamptz default now()
 );
 

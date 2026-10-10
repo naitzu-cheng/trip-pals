@@ -31,6 +31,12 @@ export class TripMap {
     this.map.on('click', e => this.onClick?.(e.lngLat));
     this.ready = new Promise(res => this.map.on('load', res));
     this.ready.then(() => {
+      this.map.addSource('stop-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      this.map.addLayer({
+        id: 'stop-lines', type: 'line', source: 'stop-lines',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 3.5, 'line-opacity': 0.8, 'line-dasharray': [1.5, 1.5] },
+      });
       this.map.addLayer(this._avatarLayer());
       this.map.addSource('route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       this.map.addLayer({
@@ -111,10 +117,31 @@ export class TripMap {
       const el = document.createElement('button');
       el.className = 'pin ' + (p.className || '');
       el.innerHTML = `<span>${p.emoji || '📍'}</span>`;
+      if (p.color) el.style.setProperty('--pc', p.color);
       el.title = p.title || '';
       el.addEventListener('click', ev => { ev.stopPropagation(); p.onClick?.(); });
       return new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([p.lng, p.lat]).addTo(this.map);
     });
+  }
+
+  // 每天的行程用虛線依序連起來：lines = [{ color, coords: [[lng, lat], ...] }]
+  async setStopLines(lines) {
+    await this.ready;
+    this.map.getSource('stop-lines').setData({
+      type: 'FeatureCollection',
+      features: lines.filter(l => l.coords.length > 1).map(l => ({
+        type: 'Feature', properties: { color: l.color }, geometry: { type: 'LineString', coordinates: l.coords },
+      })),
+    });
+  }
+
+  fitTo(points) {
+    if (!points.length) return false;
+    if (points.length === 1) { this.flyTo(points[0].lng, points[0].lat, 16); return true; }
+    const b = new maplibregl.LngLatBounds();
+    points.forEach(p => b.extend([p.lng, p.lat]));
+    this.map.fitBounds(b, { padding: { top: 100, bottom: 120, left: 50, right: 80 }, maxZoom: 16, pitch: 45 });
+    return true;
   }
 
   async setRoute(geometry) {

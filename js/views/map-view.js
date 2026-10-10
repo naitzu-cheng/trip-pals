@@ -3,6 +3,8 @@ import { html, Segmented, toast, errMsg } from '../ui.js';
 import { TripMap, distMeters } from '../map.js';
 import { searchPlaces, reverseGeocode, route, googleMapsDirections, googleMapsPlace, TRAVEL_MODES, fmtDist, fmtDur } from '../geo.js';
 import { catEmoji, MEMBER_COLORS } from '../consts.js';
+import { groupStops, stopLabel } from '../itin.js';
+import { NoResultTips } from './itinerary.js';
 
 export function MapView({ app, visible }) {
   const { store, trip, profile, pos, companions } = app;
@@ -53,7 +55,7 @@ export function MapView({ app, visible }) {
     const f = app.focus;
     if (!f || f.lat == null) return;
     setTimeout(() => mapRef.current?.flyTo(f.lng, f.lat, 17), 80);
-    if (f.name) setCard({ ...f, kind: f.trip_id ? 'place' : 'new', ref: f });
+    if (f.name) setCard({ ...f, kind: f.kind || (f.trip_id ? 'place' : 'new'), ref: f.ref || f });
   }, [app.focus]);
 
   // 讀取地點和行程
@@ -66,18 +68,30 @@ export function MapView({ app, visible }) {
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    const sortedStops = [...stops].sort((a, b) => `${a.day}${a.time}`.localeCompare(`${b.day}${b.time}`));
+    const groups = groupStops(stops.filter(s => s.lat != null), trip);
+    m.setStopLines(groups.filter(g => g.day).map(g => ({ color: g.color, coords: g.items.map(s => [s.lng, s.lat]) })));
     m.setPins([
       ...places.map(p => ({
         ...p, emoji: catEmoji(p.category), title: p.name, className: 'mine',
         onClick: () => setCard({ ...p, kind: 'place', ref: p }),
       })),
-      ...sortedStops.map((s, i) => ({
-        ...s, emoji: String(i + 1), title: s.title, className: 'stop',
-        onClick: () => setCard({ name: s.title, address: s.address, lat: s.lat, lng: s.lng, kind: 'stop', ref: s }),
-      })),
+      ...groups.flatMap(g => g.items.map((s, i) => ({
+        ...s, emoji: stopLabel(g, i), title: s.title, className: 'stop', color: g.color,
+        onClick: () => setCard({ name: s.title, address: s.address, lat: s.lat, lng: s.lng, kind: 'stop', ref: s, label: stopLabel(g, i) }),
+      }))),
     ]);
+    // 第一次載入：人不在旅遊地附近時，直接顯示整趟行程
+    if (!fitted.current && (stops.length || places.length)) {
+      fitted.current = true;
+      if (!pos || !trip.center || distMeters(pos, trip.center) > 30000) setTimeout(showAll, 300);
+    }
   }, [places, stops]);
+
+  const fitted = useRef(false);
+  function showAll() {
+    const pts = [...stops, ...places].filter(p => p.lat != null);
+    if (!mapRef.current?.fitTo(pts)) toast('還沒有任何有地點的行程或標註');
+  }
 
   // 我的角色
   const firstFix = useRef(true);
@@ -139,7 +153,7 @@ export function MapView({ app, visible }) {
 
   const addStop = async () => {
     try {
-      await store.put('itinerary', { trip_id: trip.id, title: card.name, address: card.address, lat: card.lat, lng: card.lng, day: trip.start_date || null, time: '' });
+      await store.put('itinerary', { trip_id: trip.id, title: card.name, address: card.address, lat: card.lat, lng: card.lng, day: trip.start_date || null, time: '', position: Date.now() });
       app.bump();
       toast('🗓️ 已加入行程（可到「行程」調整日期時間）');
     } catch (err) { errMsg(err); }
@@ -172,14 +186,15 @@ export function MapView({ app, visible }) {
       <div class="map-host" ref=${host}></div>
 
       <form class="map-search" onSubmit=${doSearch}>
-        <input class="input" placeholder="🔍 搜尋地點、店名、車站…" value=${q} onInput=${e => setQ(e.target.value)} />
+        <input class="input" placeholder="🔍 搜尋地點、地址、經緯度…" enterkeyhint="search" value=${q} onInput=${e => setQ(e.target.value)} />
         ${searching && html`<span class="spin">⏳</span>`}
       </form>
       ${results && html`
         <div class="search-results">
-          ${!results.length && html`<div class="muted pad">找不到結果，換個關鍵字試試</div>`}
+
           ${results.map(r => html`<button class="result" onClick=${() => pickResult(r)}>
             <b>${r.name}</b><small>${r.address}</small></button>`)}
+          <${NoResultTips} q=${q} empty=${!results.length} />
           <button class="result close" onClick=${() => setResults(null)}>關閉</button>
         </div>`}
 
@@ -188,6 +203,7 @@ export function MapView({ app, visible }) {
           onClick=${() => { setMode(mode === 'mark' ? 'browse' : 'mark'); if (mode !== 'mark') toast('點地圖上任一處來標註'); }}>📌</button>
         <button class=${'fab' + (app.simulate ? ' on' : '')} title="模擬走路"
           onClick=${() => app.setSimulate(!app.simulate)}>🎮</button>
+        <button class="fab" title="顯示全部行程與地點" onClick=${showAll}>🗓️</button>
         <button class="fab" title="回到我的位置" onClick=${locate}>📍</button>
       </div>
       ${app.simulate && html`<div class="sim-banner">🎮 模擬模式：點地圖，角色就會走過去</div>`}
@@ -196,7 +212,7 @@ export function MapView({ app, visible }) {
       ${card && html`
         <div class="place-card">
           <button class="icon-btn card-close" onClick=${closeCard}>✕</button>
-          <div class="pc-title">${card.kind === 'place' ? catEmoji(card.category) + ' ' : card.kind === 'stop' ? '🗓️ ' : ''}${card.name}</div>
+          <div class="pc-title">${card.kind === 'place' ? catEmoji(card.category) + ' ' : card.kind === 'stop' ? `🗓️ ${card.label ? card.label + ' ' : ''}` : ''}${card.name}</div>
           ${card.address && html`<div class="pc-addr">${card.address}</div>`}
           ${pos && html`<div class="pc-dist">距離你約 ${fmtDist(distMeters(pos, card))}</div>`}
           <div class="row gap wrap">

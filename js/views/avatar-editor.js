@@ -65,10 +65,13 @@ export function AvatarPreview({ config, height = 260, spin = true, walking = fal
 }
 
 const SECTIONS = [
-  ['臉', [['skin', '膚色', 'color'], ['eyes', '眼睛'], ['blush', '腮紅', 'bool']]],
-  ['頭髮', [['hairStyle', '髮型'], ['hair', '髮色', 'color']]],
-  ['衣服', [['topStyle', '上衣'], ['top', '上衣顏色', 'color'], ['bottom', '褲子顏色', 'color'], ['shoes', '鞋子', 'color']]],
-  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵'], ['glasses', '眼鏡'], ['backpack', '背包', 'bool'], ['backpackColor', '背包顏色', 'color']]],
+  ['臉', [['skin', '膚色', 'color'], ['eyes', '眼睛'], ['eyeColor', '眼睛顏色', 'color'], ['brows', '眉毛'],
+    ['nose', '鼻子'], ['mouth', '嘴巴'], ['blush', '腮紅', 'bool']]],
+  ['頭髮', [['hairStyle', '髮型'], ['bangs', '瀏海'], ['hair', '髮色', 'color']]],
+  ['衣服', [['topStyle', '上衣'], ['top', '上衣顏色', 'color'], ['bottomStyle', '下身'], ['bottom', '下身顏色（浴衣＝腰帶顏色）', 'color']]],
+  ['鞋子', [['shoeStyle', '款式'], ['shoes', '鞋子顏色', 'color']]],
+  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵'], ['glasses', '眼鏡'],
+    ['camera', '相機', 'bool'], ['backpack', '背包', 'bool'], ['backpackColor', '背包顏色', 'color']]],
 ];
 
 export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
@@ -86,6 +89,7 @@ export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
     for (const [k, cols] of Object.entries(PALETTE)) next[k] = pick(cols);
     next.blush = Math.random() > 0.3;
     next.backpack = Math.random() > 0.4;
+    next.camera = Math.random() > 0.7;
     setCfg(next);
   };
 
@@ -126,7 +130,10 @@ export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
               </div>`
             : kind === 'bool' ? html`
               <${Segmented} value=${cfg[key]} options=${[[true, '有'], [false, '無']]} onChange=${v => set(key, v)} />`
-            : html`<${Segmented} value=${cfg[key]} options=${OPTIONS[key]} onChange=${v => set(key, v)} />`}
+            : html`<div class="chips wrap tight">${OPTIONS[key].map(([v, l]) => html`
+                <button class=${'chip' + (cfg[key] === v ? ' on' : '')} onClick=${() => set(key, v)}>${l}</button>`)}</div>
+              ${key === 'bottomStyle' && (cfg.topStyle === 'dress' || cfg.topStyle === 'yukata') &&
+                html`<div class="muted small">（洋裝、浴衣是連身款，不會顯示下身）</div>`}`}
           </div>`)}
       </div>
       <div class="row gap end sticky-actions">

@@ -103,6 +103,9 @@ class CloudStore {
   }
   async init() { return this; }
   _err({ data, error }) {
+    if (error && /'position' column|column .*position/i.test(error.message)) {
+      throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/002_itinerary_position.sql');
+    }
     if (error) throw new Error(error.message);
     return data;
   }

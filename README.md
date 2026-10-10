@@ -92,13 +92,25 @@ npx vercel trip-pals --prod
 
 ---
 
+## 資料庫更新紀錄
+
+如果你在某次更新**之前**就已經建立了 Supabase 專案，請到 Supabase → SQL Editor 依序執行還沒跑過的更新檔（每個只要執行一次）：
+
+| 檔案 | 內容 |
+|---|---|
+| [`supabase/migrations/002_itinerary_position.sql`](supabase/migrations/002_itinerary_position.sql) | 行程可以手動排序 |
+
+新建立的專案直接執行 `schema.sql` 就好，裡面已經包含所有更新。
+
+---
+
 ## 使用的免費服務（都不需要 API key）
 
 | 用途 | 服務 |
 |---|---|
 | 3D 地圖圖資 | [OpenFreeMap](https://openfreemap.org)（OpenStreetMap 資料）＋ MapLibre GL |
 | 3D 角色 | Three.js（用基本幾何形狀組成，不需要模型檔） |
-| 地點搜尋 | Nominatim（OpenStreetMap） |
+| 地點搜尋 | Nominatim（OpenStreetMap）＋ Photon（模糊搜尋）＋ 日本國土地理院（日本地址），也支援經緯度與 Google 地圖網址 |
 | 路線規劃 | OSRM（routing.openstreetmap.de） |
 | 大眾運輸 | 開啟 Google 地圖導航（深層連結） |
 | 介面 | Preact + htm（不需要 build） |

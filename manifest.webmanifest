@@ -1,0 +1,14 @@
+{
+  "name": "旅伴 TripPals",
+  "short_name": "旅伴",
+  "description": "和 3D 小角色一起旅行：行程、地點清單、穿搭筆記、同行人位置分享",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf6e9",
+  "theme_color": "#7ec4a4",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

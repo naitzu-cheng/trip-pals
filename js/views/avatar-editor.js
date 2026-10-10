@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { html, Segmented, toast, errMsg } from '../ui.js';
-import { buildAvatar, addLights, disposeTree, DEFAULT_AVATAR, OPTIONS, PALETTE } from '../avatar.js';
+import { buildAvatar, addLights, disposeTree, normalize, OPTIONS, PALETTE } from '../avatar.js';
 
 export function AvatarPreview({ config, height = 260, spin = true, walking = false }) {
   const host = useRef();
@@ -11,10 +12,18 @@ export function AvatarPreview({ config, height = 260, spin = true, walking = fal
     const s = st.current;
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     host.current.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     addLights(scene);
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(0.6, 40), new THREE.MeshBasicMaterial({ color: '#d3f9d8' }));
+    // 柔和的室內環境光，讓塑膠 / 公仔質感出來
+    try {
+      const pm = new THREE.PMREMGenerator(renderer);
+      scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.traverse(o => { if (o.isLight) o.intensity *= 0.55; });
+    } catch { /* 舊裝置不支援就算了 */ }
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(0.62, 48), new THREE.MeshBasicMaterial({ color: '#e7f5ff', transparent: true, opacity: 0.9 }));
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
@@ -68,14 +77,16 @@ const SECTIONS = [
   ['臉', [['skin', '膚色', 'color'], ['eyes', '眼睛'], ['eyeColor', '眼睛顏色', 'color'], ['brows', '眉毛'],
     ['nose', '鼻子'], ['mouth', '嘴巴'], ['blush', '腮紅', 'bool']]],
   ['頭髮', [['hairStyle', '髮型'], ['bangs', '瀏海'], ['hair', '髮色', 'color']]],
-  ['衣服', [['topStyle', '上衣'], ['top', '上衣顏色', 'color'], ['bottomStyle', '下身'], ['bottom', '下身顏色（浴衣＝腰帶顏色）', 'color']]],
+  ['衣服', [['topStyle', '上衣'], ['top', '上衣顏色', 'color'], ['bottomStyle', '下身'], ['bottom', '下身顏色（浴衣＝腰帶顏色）', 'color'],
+    ['legwear', '襪子 / 褲襪'], ['legColor', '襪子顏色', 'color']]],
   ['鞋子', [['shoeStyle', '款式'], ['shoes', '鞋子顏色', 'color']]],
-  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵'], ['glasses', '眼鏡'],
-    ['camera', '相機', 'bool'], ['backpack', '背包', 'bool'], ['backpackColor', '背包顏色', 'color']]],
+  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵（兜帽也會用這個）'], ['glasses', '眼鏡'],
+    ['scarf', '圍巾'], ['scarfColor', '圍巾顏色', 'color'], ['backpack', '背包'], ['backpackColor', '背包顏色', 'color'],
+    ['camera', '相機', 'bool']]],
 ];
 
 export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
-  const [cfg, setCfg] = useState({ ...DEFAULT_AVATAR, ...(initial || {}) });
+  const [cfg, setCfg] = useState(normalize(initial));
   const [name, setName] = useState(initialName || '');
   const [tab, setTab] = useState('臉');
   const [walk, setWalk] = useState(false);
@@ -88,7 +99,6 @@ export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
     for (const [k, opts] of Object.entries(OPTIONS)) next[k] = pick(opts)[0];
     for (const [k, cols] of Object.entries(PALETTE)) next[k] = pick(cols);
     next.blush = Math.random() > 0.3;
-    next.backpack = Math.random() > 0.4;
     next.camera = Math.random() > 0.7;
     setCfg(next);
   };

@@ -8,43 +8,43 @@ import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 
 const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
 
-/* ---------------- 骨架（靜止姿勢的世界座標，二頭身比例） ---------------- */
+/* ---------------- 骨架（靜止姿勢的世界座標，三頭身比例） ---------------- */
 // [名稱, 父骨頭, 位置]
 const BONES = [
-  ['hips', null, V(0, 0.2)],
-  ['spine', 'hips', V(0, 0.26)],
-  ['chest', 'spine', V(0, 0.32)],
-  ['neck', 'chest', V(0, 0.385)],
-  ['head', 'neck', V(0, 0.41)],
+  ['hips', null, V(0, 0.42)],
+  ['spine', 'hips', V(0, 0.48)],
+  ['chest', 'spine', V(0, 0.55)],
+  ['neck', 'chest', V(0, 0.63)],
+  ['head', 'neck', V(0, 0.68)],
   ...[1, -1].flatMap(s => {
     const n = s > 0 ? 'L' : 'R';
     return [
-      ['upperLeg' + n, 'hips', V(s * 0.046, 0.18)],
-      ['lowerLeg' + n, 'upperLeg' + n, V(s * 0.049, 0.098, 0.004)],
-      ['foot' + n, 'lowerLeg' + n, V(s * 0.051, 0.034, -0.003)],
-      ['upperArm' + n, 'chest', V(s * 0.078, 0.368)],
-      ['lowerArm' + n, 'upperArm' + n, V(s * 0.118, 0.3)],
-      ['hand' + n, 'lowerArm' + n, V(s * 0.146, 0.245)],
+      ['upperLeg' + n, 'hips', V(s * 0.042, 0.39)],
+      ['lowerLeg' + n, 'upperLeg' + n, V(s * 0.045, 0.2, 0.004)],
+      ['foot' + n, 'lowerLeg' + n, V(s * 0.046, 0.045, -0.004)],
+      ['upperArm' + n, 'chest', V(s * 0.068, 0.61)],
+      ['lowerArm' + n, 'upperArm' + n, V(s * 0.135, 0.53)],
+      ['hand' + n, 'lowerArm' + n, V(s * 0.19, 0.455)],
     ];
   }),
 ];
 
 // 每根骨頭負責的線段（用來算權重）
 const SEGMENTS = [
-  ['hips', V(0, 0.15), V(0, 0.23)],
-  ['spine', V(0, 0.23), V(0, 0.29)],
-  ['chest', V(0, 0.29), V(0, 0.37)],
-  ['chest', V(-0.055, 0.368), V(0.055, 0.368)],
-  ['neck', V(0, 0.37), V(0, 0.44)],
+  ['hips', V(0, 0.35), V(0, 0.45)],
+  ['spine', V(0, 0.45), V(0, 0.52)],
+  ['chest', V(0, 0.52), V(0, 0.615)],
+  ['chest', V(-0.05, 0.61), V(0.05, 0.61)],
+  ['neck', V(0, 0.615), V(0, 0.71)],
   ...[1, -1].flatMap(s => {
     const n = s > 0 ? 'L' : 'R';
     return [
-      ['upperLeg' + n, V(s * 0.046, 0.165), V(s * 0.049, 0.1, 0.004)],
-      ['lowerLeg' + n, V(s * 0.049, 0.098, 0.004), V(s * 0.051, 0.038, -0.003)],
-      ['foot' + n, V(s * 0.051, 0.03, -0.003), V(s * 0.051, 0.01, 0.055)],
-      ['upperArm' + n, V(s * 0.082, 0.365), V(s * 0.118, 0.3)],
-      ['lowerArm' + n, V(s * 0.118, 0.3), V(s * 0.146, 0.245)],
-      ['hand' + n, V(s * 0.146, 0.245), V(s * 0.162, 0.205)],
+      ['upperLeg' + n, V(s * 0.042, 0.37), V(s * 0.045, 0.205, 0.004)],
+      ['lowerLeg' + n, V(s * 0.045, 0.2, 0.004), V(s * 0.046, 0.05, -0.004)],
+      ['foot' + n, V(s * 0.046, 0.04, -0.004), V(s * 0.047, 0.01, 0.06)],
+      ['upperArm' + n, V(s * 0.072, 0.607), V(s * 0.135, 0.53)],
+      ['lowerArm' + n, V(s * 0.135, 0.53), V(s * 0.19, 0.455)],
+      ['hand' + n, V(s * 0.19, 0.455), V(s * 0.215, 0.415)],
     ];
   }),
 ];
@@ -76,31 +76,33 @@ export function roundCone(px, py, pz, a, b, r1, r2) {
 }
 
 function bodySDF(x, y, z) {
-  // 小嬰兒般的身體：圓肚子、短胖腿、短手
-  let t = ellipsoid(x, y, z, 0, 0.2, -0.004, 0.084, 0.064, 0.072);
-  t = smin(t, ellipsoid(x, y, z, 0, 0.262, 0.01, 0.087, 0.074, 0.078), 0.05);
-  t = smin(t, ellipsoid(x, y, z, 0, 0.33, 0, 0.078, 0.058, 0.064), 0.05);
-  t = smin(t, roundCone(x, y, z, V(-0.062, 0.366), V(0.062, 0.366), 0.034, 0.034), 0.035);
-  t = smin(t, roundCone(x, y, z, V(0, 0.36), V(0, 0.45), 0.03, 0.028), 0.02);
+  // 三頭身：窄肩、有腰身、骨盆和肩膀差不多寬（不是倒三角）、腿比較長
+  let t = ellipsoid(x, y, z, 0, 0.41, -0.005, 0.08, 0.062, 0.062);
+  t = smin(t, ellipsoid(x, y, z, 0, 0.48, 0, 0.062, 0.05, 0.048), 0.035);
+  t = smin(t, ellipsoid(x, y, z, 0, 0.555, 0.002, 0.07, 0.058, 0.05), 0.035);
+  t = smin(t, roundCone(x, y, z, V(-0.052, 0.607), V(0.052, 0.607), 0.028, 0.028), 0.03);
+  t = smin(t, roundCone(x, y, z, V(0, 0.6), V(0, 0.71), 0.021, 0.019), 0.018);
   const s = x >= 0 ? 1 : -1; // 左右對稱：只算靠近的那一側
-  let leg = roundCone(x, y, z, V(s * 0.046, 0.18), V(s * 0.049, 0.098, 0.004), 0.045, 0.035);
-  leg = smin(leg, roundCone(x, y, z, V(s * 0.049, 0.098, 0.004), V(s * 0.051, 0.034, -0.003), 0.035, 0.027), 0.02);
-  leg = smin(leg, ellipsoid(x, y, z, s * 0.051, 0.018, 0.016, 0.03, 0.02, 0.042), 0.018);
-  let arm = roundCone(x, y, z, V(s * 0.08, 0.367), V(s * 0.118, 0.3), 0.03, 0.024);
-  arm = smin(arm, roundCone(x, y, z, V(s * 0.118, 0.3), V(s * 0.146, 0.245), 0.024, 0.02), 0.012);
-  arm = smin(arm, ellipsoid(x, y, z, s * 0.155, 0.225, 0.004, 0.024, 0.028, 0.02), 0.014);
-  t = smin(t, leg, 0.03);
-  t = smin(t, arm, 0.022);
+  let leg = roundCone(x, y, z, V(s * 0.044, 0.39), V(s * 0.046, 0.2, 0.004), 0.05, 0.034);
+  leg = smin(leg, roundCone(x, y, z, V(s * 0.046, 0.2, 0.004), V(s * 0.046, 0.045, -0.004), 0.034, 0.023), 0.018);
+  leg = smin(leg, ellipsoid(x, y, z, s * 0.046, 0.135, -0.009, 0.036, 0.055, 0.035), 0.02); // 小腿肚
+  leg = smin(leg, ellipsoid(x, y, z, s * 0.047, 0.02, 0.016, 0.028, 0.021, 0.047), 0.016);
+  let arm = roundCone(x, y, z, V(s * 0.07, 0.608), V(s * 0.135, 0.53), 0.025, 0.02);
+  arm = smin(arm, roundCone(x, y, z, V(s * 0.135, 0.53), V(s * 0.19, 0.455), 0.02, 0.016), 0.009);
+  arm = smin(arm, ellipsoid(x, y, z, s * 0.205, 0.432, 0.003, 0.02, 0.028, 0.014), 0.011);
+  t = smin(t, leg, 0.02);
+  t = smin(t, arm, 0.015);
   return t;
 }
 
-// 頭：不是球！頭頂圓、兩頰鼓起、下巴小小的（麻糬臉）。單位沿用頭部零件（舊版球半徑 0.27）
+// 頭：上大下小 —— 寬圓的頭頂和額頭，往下收成小巧的下巴。單位沿用頭部零件（頭半徑約 0.27）
 export function headSDF(x, y, z) {
-  let t = ellipsoid(x, y, z, 0, 0.035, -0.015, 0.285, 0.26, 0.27);
-  // 兩邊臉頰都要算（只算一邊會在臉中間留下一條接縫）
-  t = smin(t, ellipsoid(x, y, z, 0.12, -0.085, 0.065, 0.155, 0.135, 0.16), 0.09);
-  t = smin(t, ellipsoid(x, y, z, -0.12, -0.085, 0.065, 0.155, 0.135, 0.16), 0.09);
-  t = smin(t, ellipsoid(x, y, z, 0, -0.125, 0.07, 0.15, 0.105, 0.145), 0.08);
+  let t = ellipsoid(x, y, z, 0, 0.05, -0.02, 0.28, 0.27, 0.27);
+  t = smin(t, ellipsoid(x, y, z, 0, -0.1, 0.05, 0.195, 0.15, 0.175), 0.1);
+  t = smin(t, ellipsoid(x, y, z, 0, -0.185, 0.085, 0.085, 0.065, 0.075), 0.07);
+  // 柔軟的臉頰（兩邊都要算，避免中間接縫）
+  t = smin(t, ellipsoid(x, y, z, 0.11, -0.075, 0.1, 0.12, 0.1, 0.12), 0.06);
+  t = smin(t, ellipsoid(x, y, z, -0.11, -0.075, 0.1, 0.12, 0.1, 0.12), 0.06);
   return t;
 }
 
@@ -203,7 +205,7 @@ function computeWeights(P) {
 let BASE = null;
 export function bodyBase() {
   if (BASE) return BASE;
-  const flat = polygonize(bodySDF, V(-0.2, -0.005, -0.095), V(0.2, 0.46, 0.11), 0.0055);
+  const flat = polygonize(bodySDF, V(-0.24, -0.005, -0.075), V(0.24, 0.72, 0.075), 0.0057);
   const { P, N, index } = buildGeometry(bodySDF, flat);
   const W = computeWeights(P);
   BASE = { P, N, index, ...W, cache: new Map() };
@@ -249,18 +251,18 @@ const isLeg = d => d.startsWith('upperLeg') || d.startsWith('lowerLeg') || d.sta
 const isArm = d => d.startsWith('upperArm') || d.startsWith('lowerArm') || d.startsWith('hand');
 
 export const REGIONS = {
-  torso: (d, t, p) => (d === 'chest' || d === 'spine' || (d === 'hips' && p.y > 0.235)) && p.y < 0.39,
-  torsoHigh: (d, t, p) => (d === 'chest' || d === 'spine' || (d === 'hips' && p.y > 0.235)) && p.y < 0.405,
-  tube: (d, t, p) => (d === 'chest' || d === 'spine') && p.y > 0.29 && p.y < 0.35,
+  torso: (d, t, p) => (d === 'chest' || d === 'spine' || (d === 'hips' && p.y > 0.455)) && p.y < 0.64,
+  torsoHigh: (d, t, p) => (d === 'chest' || d === 'spine' || (d === 'hips' && p.y > 0.455)) && p.y < 0.655,
+  tube: (d, t, p) => (d === 'chest' || d === 'spine') && p.y > 0.52 && p.y < 0.6,
   sleeveShort: (d, t) => d.startsWith('upperArm') && t < 0.6,
   sleeveLong: (d, t) => d.startsWith('upperArm') || (d.startsWith('lowerArm') && t < 0.9),
-  waist: (d, t, p) => (d === 'hips' || (d === 'spine' && p.y < 0.27)) && p.y < 0.27,
-  brief: (d, t, p) => (d === 'hips' && p.y < 0.235) || (d.startsWith('upperLeg') && t < 0.15),
+  waist: (d, t, p) => (d === 'hips' || (d === 'spine' && p.y < 0.49)) && p.y < 0.49,
+  brief: (d, t, p) => (d === 'hips' && p.y < 0.445) || (d.startsWith('upperLeg') && t < 0.12),
   shorts: (d, t) => d.startsWith('upperLeg') && t < 0.55,
   pants: (d, t) => d.startsWith('upperLeg') || (d.startsWith('lowerLeg') && t < 0.9),
   socks: (d, t) => (d.startsWith('lowerLeg') && t > 0.72) || d.startsWith('foot'),
   knee: (d, t) => (d.startsWith('lowerLeg') && t > 0.12) || d.startsWith('foot'),
-  tights: (d, t, p) => isLeg(d) || (d === 'hips' && p.y < 0.235),
+  tights: (d, t, p) => isLeg(d) || (d === 'hips' && p.y < 0.445),
 };
 
 export function shell(region, thickness) {
@@ -380,28 +382,28 @@ export function animate(rig, t, walking, opts = {}) {
   const b = rig.bones, step = opts.smallSteps ? 0.55 : 1;
   const s = Math.sin(t * 9), c = Math.cos(t * 9);
   if (walking) {
-    b.upperLegL.rotation.x = -s * 0.6 * step;
-    b.upperLegR.rotation.x = s * 0.6 * step;
+    b.upperLegL.rotation.x = -s * 0.5 * step;
+    b.upperLegR.rotation.x = s * 0.5 * step;
     b.lowerLegL.rotation.x = Math.max(0, -c) * 0.9 * step;
     b.lowerLegR.rotation.x = Math.max(0, c) * 0.9 * step;
     b.footL.rotation.x = -Math.max(0, -c) * 0.3 * step;
     b.footR.rotation.x = -Math.max(0, c) * 0.3 * step;
-    b.upperArmL.rotation.set(s * 0.7, 0, -0.2);
-    b.upperArmR.rotation.set(-s * 0.7, 0, 0.2);
+    b.upperArmL.rotation.set(s * 0.6, 0, -0.42);
+    b.upperArmR.rotation.set(-s * 0.6, 0, 0.42);
     b.lowerArmL.rotation.x = -0.3 - Math.max(0, s) * 0.3;
     b.lowerArmR.rotation.x = -0.3 - Math.max(0, -s) * 0.3;
-    b.hips.position.y = 0.2 + Math.abs(c) * 0.012;
+    b.hips.position.y = 0.42 + Math.abs(c) * 0.015;
     b.hips.rotation.y = s * 0.08;
     b.chest.rotation.y = -s * 0.1;
     b.head.rotation.z = s * 0.03;
   } else {
     for (const n of ['upperLegL', 'upperLegR', 'lowerLegL', 'lowerLegR', 'footL', 'footR']) b[n].rotation.x *= 0.8;
     const sway = Math.sin(t * 1.6);
-    b.upperArmL.rotation.set(sway * 0.05, 0, -0.18);
-    b.upperArmR.rotation.set(-sway * 0.05, 0, 0.18);
+    b.upperArmL.rotation.set(sway * 0.05, 0, -0.5);
+    b.upperArmR.rotation.set(-sway * 0.05, 0, 0.5);
     b.lowerArmL.rotation.x = -0.15;
     b.lowerArmR.rotation.x = -0.15;
-    b.hips.position.y = 0.2;
+    b.hips.position.y = 0.42;
     b.hips.rotation.y = 0;
     b.chest.rotation.y = 0;
     b.chest.scale.setScalar(1 + Math.sin(t * 2.2) * 0.008);

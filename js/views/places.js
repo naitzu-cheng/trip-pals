@@ -11,7 +11,7 @@ export function PlacesView({ app }) {
   const openId = app.openPlaceId;
 
   useEffect(() => {
-    Promise.all([store.list('places', { trip_id: trip.id }), store.list('place_items', { trip_id: trip.id })])
+    Promise.all([store.list('places', { trip_id: trip.id, user_id: store.userId }), store.list('place_items', { trip_id: trip.id, user_id: store.userId })])
       .then(([p, i]) => { setPlaces(p); setItems(i); })
       .catch(errMsg);
   }, [trip.id, app.version]);

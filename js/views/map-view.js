@@ -60,7 +60,7 @@ export function MapView({ app, visible }) {
 
   // 讀取地點和行程
   useEffect(() => {
-    Promise.all([store.list('places', { trip_id: trip.id }), store.list('itinerary', { trip_id: trip.id })])
+    Promise.all([store.list('places', { trip_id: trip.id, user_id: store.userId }), store.list('itinerary', { trip_id: trip.id })])
       .then(([p, s]) => { setPlaces(p); setStops(s); })
       .catch(errMsg);
   }, [trip.id, app.version]);

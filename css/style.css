@@ -353,3 +353,9 @@ textarea.input { resize: vertical; }
 @media (min-width: 761px) {
   #app { box-shadow: 0 0 0 2px var(--line); }
 }
+
+.member-btns { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.item-sec h3 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* iPhone 的日期 / 時間欄位不要撐出畫面 */
+.field { min-width: 0; }
+input.input[type='date'], input.input[type='time'] { -webkit-appearance: none; appearance: none; min-width: 0; display: block; min-height: 44px; }

@@ -137,7 +137,8 @@ class CloudStore {
     this._err(await this.sb.from(table).delete().eq('id', id));
   }
   async uploadImage(blob) {
-    const path = `${this.userId}/${uid()}.jpg`;
+    // 路徑含旅程 id：分享給夥伴時，對方只看得到這趟旅程的圖
+    const path = this.currentTrip ? `${this.userId}/${this.currentTrip}/${uid()}.jpg` : `${this.userId}/${uid()}.jpg`;
     this._err(await this.sb.storage.from('media').upload(path, blob, { contentType: blob.type || 'image/jpeg' }));
     return 'sb:' + path;
   }
@@ -181,6 +182,23 @@ class CloudStore {
   }
   async leaveTrip(tripId) {
     this._err(await this.sb.from('trip_members').delete().eq('trip_id', tripId).eq('user_id', this.userId));
+  }
+
+  /* ---- 用密碼分享自己的地點 / 筆記 ---- */
+  _shareErr(r) {
+    if (r.error && /function .*(private|set_private|unlock)|private_status|Could not find the function/i.test(r.error.message)) {
+      throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/003_private_share.sql');
+    }
+    return this._err(r);
+  }
+  async setPrivatePassword(tripId, pass) {
+    this._shareErr(await this.sb.rpc('set_private_password', { t: tripId, pass: pass || null }));
+  }
+  async unlockPrivate(tripId, ownerId, pass) {
+    return this._shareErr(await this.sb.rpc('unlock_private', { t: tripId, owner: ownerId, pass }));
+  }
+  async privateStatus(tripId) {
+    return this._shareErr(await this.sb.rpc('private_status', { t: tripId })) || [];
   }
 }
 

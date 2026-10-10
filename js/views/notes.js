@@ -9,7 +9,7 @@ export function NotesView({ app }) {
   const [edit, setEdit] = useState(null);
   const [light, setLight] = useState(null);
 
-  const load = () => store.list('notes', { trip_id: trip.id }).then(setNotes).catch(errMsg);
+  const load = () => store.list('notes', { trip_id: trip.id, user_id: store.userId }).then(setNotes).catch(errMsg);
   useEffect(() => { load(); }, [trip.id, app.version]);
   if (!notes) return html`<div class="loading">載入中…</div>`;
 

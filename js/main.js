@@ -115,6 +115,7 @@ function App() {
 
   /* ---------- 導覽 ---------- */
   const openTrip = t => {
+    if (store) store.currentTrip = t.id;
     setTrip(t);
     setTab('map');
     setScreen('trip');

@@ -83,19 +83,23 @@ export function ItineraryView({ app }) {
     </div>`;
 }
 
-export function PlaceSearch({ near, onPick, placeholder = '搜尋地點、地址，或貼經緯度 / Google 地圖網址' }) {
+export function PlaceSearch({ near, onPick, onQuery, fallback = '', placeholder = '搜尋地點、地址，或貼經緯度 / Google 地圖網址' }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const find = async () => {
-    if (!q.trim()) return;
+    // 搜尋欄空著 → 直接用行程名稱找
+    const text = (q.trim() || fallback.trim());
+    if (!text) return toast('輸入要找的地點');
+    if (!q.trim()) setQ(text);
     setBusy(true);
-    try { setResults(await searchPlaces(q.trim(), near)); } catch (e) { errMsg(e); }
+    try { setResults(await searchPlaces(text, near)); } catch (e) { errMsg(e); }
     setBusy(false);
   };
   return html`
     <div class="row gap">
-      <input class="input grow" value=${q} placeholder=${placeholder} onInput=${e => setQ(e.target.value)}
+      <input class="input grow" value=${q} placeholder=${fallback.trim() ? `按「搜尋」用「${fallback.trim()}」找地點` : placeholder}
+        onInput=${e => { setQ(e.target.value); onQuery?.(e.target.value); }}
         enterkeyhint="search" onKeyDown=${e => { if (e.key === 'Enter') { e.preventDefault(); find(); } }} />
       <button type="button" class="btn ghost" disabled=${busy} onClick=${find}>${busy ? '…' : '搜尋'}</button>
     </div>
@@ -118,6 +122,9 @@ export function NoResultTips({ q, empty }) {
 function StopForm({ app, item, days, onClose, onSaved }) {
   const { store, trip } = app;
   const [f, setF] = useState({ title: '', time: '', note: '', address: '', ...item });
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [noAuto, setNoAuto] = useState(false); // 使用者自己把地點清掉了，就不要再自動帶入
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
 
   const save = async e => {
@@ -126,7 +133,22 @@ function StopForm({ app, item, days, onClose, onSaved }) {
     const row = { ...f, trip_id: trip.id, day: f.day || null };
     // 新增或換天：排到那天最後面
     if (!item.id || (item.day || null) !== row.day) row.position = Date.now();
+    setSaving(true);
+    // 還沒選地點：自動用地點欄打的字（或行程名稱）找一個最符合的
+    if (row.lat == null && !noAuto) {
+      const text = (query.trim() || row.title.trim());
+      try {
+        const [hit] = await searchPlaces(text, trip.center);
+        if (hit) {
+          Object.assign(row, { lat: hit.lat, lng: hit.lng, address: hit.address });
+          toast(`📍 已自動帶入地點：${hit.name}（不對的話可以再編輯）`, 4000);
+        } else {
+          toast('找不到這個地點，行程已儲存（可以在地點欄搜尋或貼經緯度）', 4000);
+        }
+      } catch { /* 搜尋失敗就先存 */ }
+    }
     try { await store.put('itinerary', row); onSaved(); } catch (err) { errMsg(err); }
+    setSaving(false);
   };
   const del = async () => {
     if (!(await confirmBox('刪除這個行程？'))) return;
@@ -153,9 +175,9 @@ function StopForm({ app, item, days, onClose, onSaved }) {
         <${Field} label="地點（選填，會顯示在地圖上）">
           ${f.lat != null ? html`
             <div class="picked">📍 ${f.address || f.title}
-              <button type="button" class="icon-btn" onClick=${() => setF(x => ({ ...x, lat: null, lng: null, address: '' }))}>✕</button>
+              <button type="button" class="icon-btn" onClick=${() => { setNoAuto(true); setF(x => ({ ...x, lat: null, lng: null, address: '' })); }}>✕</button>
             </div>`
-          : html`<${PlaceSearch} near=${trip.center} onPick=${r =>
+          : html`<${PlaceSearch} near=${trip.center} fallback=${f.title} onQuery=${setQuery} onPick=${r =>
               setF(x => ({ ...x, lat: r.lat, lng: r.lng, address: r.address, title: x.title || r.name }))} />`}
         </${Field}>
         <${Field} label="備註"><textarea class="input" rows="3" value=${f.note || ''}
@@ -164,7 +186,7 @@ function StopForm({ app, item, days, onClose, onSaved }) {
           ${item.id && html`<button type="button" class="btn danger" onClick=${del}>刪除</button>`}
           <div class="grow"></div>
           <button type="button" class="btn ghost" onClick=${onClose}>取消</button>
-          <button class="btn primary">儲存</button>
+          <button class="btn primary" disabled=${saving}>${saving ? '找地點中…' : '儲存'}</button>
         </div>
       </form>
     </${Sheet}>`;

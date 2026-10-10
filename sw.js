@@ -1,5 +1,5 @@
 // 簡單的離線快取：先抓網路，失敗就用快取（地圖圖磚與 API 不快取）
-const CACHE = 'trippals-v11';
+const CACHE = 'trippals-v12';
 const SHELL = ['./', 'index.html', 'css/style.css', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {

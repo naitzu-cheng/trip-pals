@@ -12,8 +12,6 @@ export function AvatarPreview({ config, height = 260, spin = true, walking = fal
     const s = st.current;
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, devicePixelRatio));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
     host.current.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     addLights(scene);
@@ -21,17 +19,17 @@ export function AvatarPreview({ config, height = 260, spin = true, walking = fal
     try {
       const pm = new THREE.PMREMGenerator(renderer);
       scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-      scene.traverse(o => { if (o.isLight) o.intensity *= 0.55; });
+      scene.traverse(o => { if (o.isLight) o.intensity *= 0.7; });
     } catch { /* 舊裝置不支援就算了 */ }
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(0.62, 48), new THREE.MeshBasicMaterial({ color: '#e7f5ff', transparent: true, opacity: 0.9 }));
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(0.42, 48), new THREE.MeshBasicMaterial({ color: '#e7f5ff', transparent: true, opacity: 0.9 }));
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
-    camera.position.set(0, 0.85, 2.6);
+    camera.position.set(0, 0.62, 1.95);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.5, 0);
+    controls.target.set(0, 0.4, 0);
     controls.enablePan = false;
-    controls.minDistance = 1.4;
+    controls.minDistance = 0.9;
     controls.maxDistance = 4;
     controls.maxPolarAngle = Math.PI * 0.55;
     controls.autoRotate = spin;

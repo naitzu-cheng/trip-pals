@@ -87,7 +87,7 @@ export const PALETTE = {
 
 /* ---------------- 材質 ---------------- */
 const vinyl = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.42, metalness: 0, ...o });
-const skinMat = color => new THREE.MeshStandardMaterial({ color, roughness: 0.55, emissive: color, emissiveIntensity: 0.12 });
+const skinMat = color => new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: color, emissiveIntensity: 0.22 });
 const fabric = color => new THREE.MeshStandardMaterial({ color, roughness: 0.9, emissive: color, emissiveIntensity: 0.05 });
 const fur = color => new THREE.MeshStandardMaterial({ color, roughness: 1, emissive: color, emissiveIntensity: 0.12 });
 const basic = (color, o = {}) => new THREE.MeshBasicMaterial({ color, ...o });
@@ -412,7 +412,7 @@ function faceTexture(c, blink) {
     let kind = c.eyes;
     if (kind === 'wink') kind = side > 0 ? 'happy' : 'sparkle';
     if (blink && !['happy', 'sleepy'].includes(kind)) kind = 'closed';
-    drawEye(g, fx(side * (kind === 'doll' ? 24.5 : kind === 'bean' ? 21 : 23)), fy(-10), side, kind, c.eyeColor);
+    drawEye(g, fx(side * (kind === 'doll' ? 24.5 : kind === 'bean' ? 22 : 23)), fy(kind === 'bean' ? -12 : -10), side, kind, c.eyeColor);
   }
 
   // 眉毛
@@ -474,11 +474,10 @@ function drawEye(g, x, y, side, kind, color) {
     return;
   }
   if (kind === 'bean') {
-    g.fillStyle = lash;
-    g.beginPath(); g.ellipse(x, y, 30, 40, 0, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#ffffff';
-    g.beginPath(); g.ellipse(x - 9, y - 14, 9, 11, -0.3, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(x + 9, y + 15, 4.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1e1714';
+    g.beginPath(); g.ellipse(x, y, 25, 35, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath(); g.ellipse(x + side * 7, y - 13, 6, 7.5, 0, 0, Math.PI * 2); g.fill();
     return;
   }
   if (kind === 'dot') {
@@ -716,8 +715,8 @@ function addHair(head, c) {
   const s = c.hairStyle;
   const geo = hairGeometry(c);
   if (!geo) return;
-  const hair = vinyl(c.hair, { roughness: 0.55 });
-  head.add(new THREE.Mesh(geo, hair));
+  const hair = vinyl(c.hair, { roughness: 0.62 });
+  head.add(new THREE.Mesh(geo, vinyl(c.hair, { roughness: 0.62, vertexColors: true })));
   // 髮圈
   for (const p of tieSpots(c)) head.add(mesh(torus(0.05, 0.016), vinyl(shade(c.hair, -0.3), { roughness: 0.3 }), [p.x, p.y, p.z], [1, 1, 1], [Math.PI / 2 - 0.4, 0, 0]));
   if ((s === 'messy' || s === 'spiky') && c.hat === 'none') {

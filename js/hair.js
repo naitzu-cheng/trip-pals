@@ -52,11 +52,17 @@ const BUNS = {
   buns: [[V(0.19, 0.24, -0.06), 0.088], [V(-0.19, 0.24, -0.06), 0.088]],
 };
 
-// 髮絲紋路：沿著繞垂直軸的角度做細細的起伏
+// 髮束：繞著頭一圈分成一撮一撮（中間圓鼓、髮束之間凹下去），正前方剛好是一撮
+const CLUMPS = 15;
+export function clump(x, y, z) {
+  const a = Math.atan2(x, z) + Math.sin(y * 5) * 0.06;
+  const fade = clamp((Math.hypot(x, z) - 0.05) / 0.15, 0, 1); // 頭頂髮旋附近漸漸平滑
+  const th = (a * CLUMPS) / 2 + 0.35 * Math.sin(a * 3); // 髮束粗細不完全一樣
+  const ridge = 1 - Math.exp(-(Math.cos(th) ** 2) * 2.6); // 凹縫是圓滑的，不是尖 V
+  return 1 - fade * (1 - ridge);
+}
 function grooves(x, y, z, depth) {
-  const a = Math.atan2(x, z);
-  const fade = clamp((Math.hypot(x, z) - 0.06) / 0.16, 0, 1); // 頭頂髮旋附近不刻，避免雜點
-  return depth * fade * (0.5 + 0.5 * Math.cos(a * 22 + Math.sin(y * 7) * 0.5));
+  return depth * clump(x, y, z);
 }
 
 function tailSDF(x, y, z, [a, m, b, r1, r2, r3]) {
@@ -77,12 +83,12 @@ export function makeHairSDF(c) {
   return (x, y, z) => {
     const dh = headSDF(x, y, z);
     // 1. 髮殼（貼頭型），表面刻紋路
-    let hair = dh - T - grooves(x, y, z, 0.0045);
+    let hair = dh - T - grooves(x, y, z, 0.011);
     // 2. 鮑伯 / 長髮：外面再包一層垂直落下的頭髮
-    if (bob) hair = smin(hair, ellipsoid(x, y, z, 0, -0.03, -0.02, 0.335, 0.31, 0.315) - grooves(x, y, z, 0.005), 0.04);
+    if (bob) hair = smin(hair, ellipsoid(x, y, z, 0, -0.03, -0.02, 0.335, 0.31, 0.315) - grooves(x, y, z, 0.012), 0.04);
     if (long) {
       const wave = style === 'wavy' ? Math.sin(y * 28) * 0.018 : 0;
-      hair = smin(hair, ellipsoid(x, y, z, 0, -0.16, -0.08, 0.33 + wave, 0.5, 0.27) - grooves(x, y, z, 0.005), 0.05);
+      hair = smin(hair, ellipsoid(x, y, z, 0, -0.16, -0.08, 0.33 + wave, 0.5, 0.27) - grooves(x, y, z, 0.012), 0.05);
     }
     // 3. 剪掉頭的內部
     hair = Math.max(hair, -(dh - 0.003));
@@ -92,7 +98,8 @@ export function makeHairSDF(c) {
     hair = Math.max(hair, hemY - y);
     // 5. 臉的開口：正面、瀏海線以下
     const faceW = bob || long ? 0.215 : 0.245;
-    const opening = Math.max(y - bang(x), Math.max(0.03 - z, Math.abs(x) - faceW));
+    const tips = c.bangs === 'none' ? 0 : 0.026 * clump(x, 0.1, 0.27);
+    const opening = Math.max(y - (bang(x) - tips), Math.max(0.03 - z, Math.abs(x) - faceW));
     hair = Math.max(hair, -opening);
     // 6. 空氣瀏海的縫隙
     if (c.bangs === 'wispy' && z > 0.1) {
@@ -102,7 +109,7 @@ export function makeHairSDF(c) {
     // 7. 中分：頭頂前方的分線
     if (c.bangs === 'middle' && z > 0) hair = Math.max(hair, -Math.max(Math.abs(x) - 0.006, 0.1 - y));
     // 8. 組件：馬尾、丸子
-    for (const t of tails) hair = smin(hair, tailSDF(x, y, z, t) - grooves(x - t[1].x, y, z - t[1].z, 0.004), 0.035);
+    for (const t of tails) hair = smin(hair, tailSDF(x, y, z, t) - grooves(x - t[1].x, y, z - t[1].z, 0.01), 0.035);
     for (const [p, r] of buns) {
       const dx = x - p.x, dy = y - p.y, dz = z - p.z;
       hair = smin(hair, Math.hypot(dx, dy, dz) - r - 0.006 * Math.cos(Math.atan2(dx, dz) * 9 + dy * 30), 0.03);
@@ -136,6 +143,13 @@ export function hairGeometry(c) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(P, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  const col = new Float32Array(P.length);
+  for (let i = 0; i < P.length; i += 3) {
+    let k = 0.66 + 0.34 * clump(P[i], P[i + 1], P[i + 2]);
+    if (N[i + 1] < -0.4) k *= 0.82; // 髮尾內側、下巴下方較暗
+    col[i] = col[i + 1] = col[i + 2] = k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setIndex(Array.from(index));
   g.userData.shared = true;
   CACHE.set(key, g);

@@ -1,7 +1,7 @@
 // 雕塑感頭髮：一層貼著頭型的「髮殼」，再依髮型剪出瀏海線、髮尾，加上馬尾 / 丸子等組件，表面刻髮絲紋路
 // 單位和頭部零件相同（頭半徑約 0.27，頭中心為原點，臉朝 +Z）
 import * as THREE from 'three';
-import { headSDF, ellipsoid, roundCone, smin, polygonize, buildGeometry } from './body.js';
+import { headSDF, ellipsoid, roundCone, smin, polygonize, buildGeometry } from './sdf.js';
 
 const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -29,6 +29,24 @@ const TAILS = {
   sidetail: [[V(0.24, 0.12, -0.13), V(0.33, -0.05, -0.15), V(0.34, -0.33, -0.12), 0.085, 0.066, 0.03]],
   pigtails: [-1, 1].map(s => [V(s * 0.21, -0.11, -0.18), V(s * 0.25, -0.2, -0.2), V(s * 0.25, -0.34, -0.17), 0.075, 0.062, 0.012]),
 };
+// 麻花辮：一串由大到小的球
+const BRAIDS = [-1, 1].map(s => Array.from({ length: 5 }, (_, i) => [V(s * (0.24 + i * 0.006), -0.1 - i * 0.068, -0.13 + i * 0.012), 0.058 - i * 0.005]));
+
+// 泡泡捲：在頭的外圍撒一圈大小不一的球（固定亂數，每次都一樣）
+const CURLS = (() => {
+  const out = [];
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 90; i++) {
+    const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.sqrt(1 - u * u);
+    const d = V(r * Math.cos(th), u, r * Math.sin(th));
+    if (d.y < -0.55) continue;
+    if (d.z > 0.45 && d.y < 0.42) continue; // 臉露出來
+    out.push([V(d.x * 0.31, d.y * 0.29 + 0.03, d.z * 0.3 - 0.01), 0.07 + rnd() * 0.03]);
+  }
+  return out;
+})();
+
 const BUNS = {
   bun: [[V(0, 0.29, -0.12), 0.1]],
   buns: [[V(0.19, 0.24, -0.06), 0.088], [V(-0.19, 0.24, -0.06), 0.088]],
@@ -47,7 +65,7 @@ function tailSDF(x, y, z, [a, m, b, r1, r2, r3]) {
 }
 
 export function makeHairSDF(c) {
-  const style = c.hairStyle === 'buns' || c.hairStyle === 'bun' || TAILS[c.hairStyle] ? 'short' : c.hairStyle;
+  const style = ['buns', 'bun', 'braids'].includes(c.hairStyle) || TAILS[c.hairStyle] ? 'short' : c.hairStyle;
   const hem = HEM[style] || HEM.short;
   const bang = BANG_LINE[c.bangs] || BANG_LINE.full;
   const hatted = ['fluffy', 'beanie', 'hood', 'cap'].includes(c.hat);
@@ -89,7 +107,18 @@ export function makeHairSDF(c) {
       const dx = x - p.x, dy = y - p.y, dz = z - p.z;
       hair = smin(hair, Math.hypot(dx, dy, dz) - r - 0.006 * Math.cos(Math.atan2(dx, dz) * 9 + dy * 30), 0.03);
     }
-    if (c.hairStyle === 'curly') hair -= 0.012 * (Math.sin(x * 45) * Math.sin(y * 45) * Math.sin(z * 45));
+    if (c.hairStyle === 'braids') {
+      for (const braid of BRAIDS) for (const [p, r] of braid) hair = smin(hair, Math.hypot(x - p.x, y - p.y, z - p.z) - r, 0.012);
+    }
+    if (c.hairStyle === 'curly' && !hatted) {
+      let balls = 1;
+      for (const [p, r] of CURLS) {
+        const dx = x - p.x, dy = y - p.y, dz = z - p.z;
+        if (Math.abs(dx) > r + 0.02 || Math.abs(dy) > r + 0.02 || Math.abs(dz) > r + 0.02) continue;
+        balls = smin(balls, Math.sqrt(dx * dx + dy * dy + dz * dz) - r, 0.012);
+      }
+      hair = smin(Math.max(hair, -opening), Math.max(balls, -(dh - 0.003)), 0.01);
+    }
     return hair;
   };
 }
@@ -101,7 +130,7 @@ export function hairGeometry(c) {
   const key = [c.hairStyle, c.bangs, hatted].join('|');
   if (CACHE.has(key)) return CACHE.get(key);
   const sdf = makeHairSDF(c);
-  const low = TAILS[c.hairStyle] || c.hairStyle === 'long' || c.hairStyle === 'wavy' ? -0.66 : -0.3;
+  const low = TAILS[c.hairStyle] || ['long', 'wavy', 'braids'].includes(c.hairStyle) ? -0.66 : -0.3;
   const flat = polygonize(sdf, V(-0.42, low, -0.46), V(0.42, 0.42, 0.38), 0.0125);
   const { P, N, index } = buildGeometry(sdf, flat);
   const g = new THREE.BufferGeometry();
@@ -115,5 +144,6 @@ export function hairGeometry(c) {
 
 // 髮圈 / 髮飾的位置（給 avatar.js 加小裝飾用）
 export function tieSpots(c) {
+  if (c.hairStyle === 'braids') return BRAIDS.map(b => b[b.length - 1][0].clone().add(V(0, -0.03, 0)));
   return (TAILS[c.hairStyle] || []).map(t => t[0]);
 }

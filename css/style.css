@@ -196,6 +196,8 @@ textarea.input { resize: vertical; }
 .avatar-preview { width: 100%; touch-action: none; }
 .avatar-preview canvas { display: block; }
 .stage-btns { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 6px; }
+.preset-btns { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-btns .chip { padding: 3px 10px; font-size: .8rem; background: rgba(255,255,255,.85); }
 .name-input { margin: 12px 0; text-align: center; font-weight: 800; font-size: 1.1rem; }
 .tabs-mini { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs-mini button { flex: 1; border: none; border-radius: 12px; padding: 8px; background: #f1ead8; font-weight: 700; }

@@ -1,58 +1,72 @@
-// Q 版 3D 角色（盲盒公仔風）
-// 身體用基本幾何體 + 旋轉曲面組成；臉是用 Canvas 畫出來的貼圖（大眼睛、腮紅、嘴巴）
+// Q 版 3D 角色（盲盒玩具風）
+// 大圓頭 + 短短的身體，手腳是一節一節的零件（不做關節），整隻手 / 整條腿擺動來走路
+// 頭和頭髮用距離場捏出來；臉是用 Canvas 畫出來的貼圖
 // 座標：Y 朝上、腳底在 y=0、臉朝 +Z，總高約 1
 import * as THREE from 'three';
 import { hairGeometry, tieSpots } from './hair.js';
-import { makeSkeleton, skinned, skinnedLathe, attach, animate, bodyGeometry, shell, headGeometries, maskGeometry } from './body.js';
+import { headGeometries, maskGeometry } from './sdf.js';
 
 export const DEFAULT_AVATAR = {
-  skin: '#ffe0cc',
-  hair: '#6b4433',
+  skin: '#ffe3d3',
+  hair: '#7a4a35',
   hairStyle: 'bob',
   bangs: 'full',
-  eyes: 'doll',
-  eyeColor: '#5b7fd6',
-  brows: 'thin',
-  nose: 'dot',
+  eyes: 'bean',
+  eyeColor: '#3b2a20',
+  brows: 'none',
+  nose: 'red',
   mouth: 'smile',
   blush: true,
   top: '#ff9aa2',
-  topStyle: 'tee',
-  bottomStyle: 'pants',
-  bottom: '#6c8cff',
+  topStyle: 'blouse',
+  bottomStyle: 'shorts',
+  bottom: '#9fb4ff',
   legwear: 'none',
   legColor: '#ffffff',
-  shoeStyle: 'sneakers',
-  shoes: '#ffffff',
+  shoeStyle: 'maryjane',
+  shoes: '#a0522d',
   hat: 'none',
-  hatColor: '#ffffff',
+  hatColor: '#ff8fab',
   ears: 'none',
+  tail: 'none',
   glasses: 'none',
   scarf: 'none',
   scarfColor: '#ff6b6b',
-  backpack: 'square',
+  backpack: 'none',
   backpackColor: '#8ce99a',
   camera: false,
 };
 
+// 一鍵套用的範本
+export const PRESETS = {
+  girl: { ...DEFAULT_AVATAR, hairStyle: 'bob', bangs: 'full', hair: '#7a4a35', hat: 'bow', hatColor: '#ff8fab', topStyle: 'dress', top: '#ffb3c1' },
+  boy: {
+    ...DEFAULT_AVATAR, hairStyle: 'short', bangs: 'side', hair: '#4a3328', eyes: 'bean', brows: 'thick', nose: 'dot', blush: false,
+    topStyle: 'hoodie', top: '#74c0fc', bottomStyle: 'pants', bottom: '#495057', shoeStyle: 'sneakers', shoes: '#ffffff', hat: 'none',
+  },
+  bunny: { ...DEFAULT_AVATAR, hairStyle: 'curly', bangs: 'none', hair: '#c08457', ears: 'bunny', tail: 'bunny', topStyle: 'blouse', top: '#a5b4fc', bottomStyle: 'shorts', bottom: '#9fa8da', shoeStyle: 'boots', shoes: '#a0705a' },
+  cat: { ...DEFAULT_AVATAR, hairStyle: 'bob', bangs: 'full', hair: '#e8857a', ears: 'cat', tail: 'cat', topStyle: 'shirt', top: '#ffd8a8', bottomStyle: 'pinafore', bottom: '#63e6be', shoeStyle: 'maryjane', shoes: '#ffd43b' },
+};
+
 export const OPTIONS = {
-  hairStyle: [['bob', '妹妹頭'], ['short', '短髮'], ['ponytail', '高馬尾'], ['lowtail', '低馬尾'], ['sidetail', '側馬尾'],
-    ['pigtails', '低雙馬尾'], ['buns', '雙丸子'], ['bun', '丸子頭'], ['long', '長髮'], ['wavy', '大波浪'],
-    ['curly', '捲髮'], ['messy', '亂翹'], ['spiky', '刺蝟頭'], ['bald', '光頭']],
+  hairStyle: [['bob', '妹妹頭'], ['short', '短髮'], ['messy', '亂翹'], ['spiky', '刺蝟頭'], ['curly', '泡泡捲'], ['braids', '麻花辮'],
+    ['ponytail', '高馬尾'], ['lowtail', '低馬尾'], ['sidetail', '側馬尾'], ['pigtails', '低雙馬尾'], ['buns', '雙丸子'], ['bun', '丸子頭'],
+    ['long', '長髮'], ['wavy', '大波浪'], ['bald', '光頭']],
   bangs: [['full', '齊瀏海'], ['wispy', '空氣瀏海'], ['middle', '中分八字'], ['side', '旁分斜瀏海'], ['none', '露額頭']],
-  eyes: [['doll', '娃娃眼'], ['sparkle', '閃亮大眼'], ['round', '圓眼'], ['lashes', '長睫毛'], ['dot', '豆豆眼'], ['happy', '笑眼'],
-    ['wink', '眨眼'], ['sleepy', '瞇瞇眼'], ['sharp', '銳利']],
-  brows: [['thin', '細眉'], ['thick', '粗眉'], ['worried', '八字眉'], ['angry', '生氣眉'], ['none', '無']],
-  nose: [['none', '無'], ['dot', '小點'], ['button', '圓鼻'], ['animal', '動物鼻']],
+  eyes: [['bean', '豆豆眼'], ['doll', '娃娃眼'], ['sparkle', '閃亮大眼'], ['round', '圓眼'], ['lashes', '長睫毛'], ['dot', '小點眼'],
+    ['happy', '笑眼'], ['wink', '眨眼'], ['sleepy', '瞇瞇眼'], ['sharp', '銳利']],
+  brows: [['none', '無'], ['thin', '細眉'], ['thick', '粗眉'], ['worried', '八字眉'], ['angry', '生氣眉']],
+  nose: [['red', '紅鼻子'], ['dot', '小點'], ['button', '圓鼻'], ['animal', '動物鼻'], ['none', '無']],
   mouth: [['smile', '微笑'], ['grin', '開口笑'], ['cat', '貓嘴 ω'], ['tongue', '吐舌'], ['pout', '嘟嘴'], ['o', '驚訝'], ['flat', '平嘴']],
-  topStyle: [['tee', 'T 恤'], ['tank', '背心'], ['shirt', '襯衫'], ['hoodie', '帽T'], ['sweater', '針織毛衣'],
-    ['jacket', '外套'], ['coat', '鋪棉大衣'], ['dress', '洋裝'], ['yukata', '浴衣']],
-  bottomStyle: [['pants', '長褲'], ['shorts', '短褲'], ['skirt', '短裙'], ['longskirt', '長裙'], ['ninja', '燈籠褲']],
+  topStyle: [['blouse', '娃娃領寬袖'], ['tee', 'T 恤'], ['shirt', '襯衫'], ['hoodie', '帽T'], ['sweater', '針織毛衣'], ['jacket', '外套'],
+    ['tank', '背心'], ['coat', '鋪棉大衣'], ['dress', '洋裝'], ['yukata', '浴衣']],
+  bottomStyle: [['shorts', '短褲'], ['pants', '長褲'], ['overalls', '吊帶褲'], ['skirt', '短裙'], ['pinafore', '吊帶裙'], ['longskirt', '長裙'], ['ninja', '燈籠褲']],
   legwear: [['none', '無'], ['socks', '短襪'], ['knee', '及膝襪'], ['tights', '褲襪']],
-  shoeStyle: [['sneakers', '球鞋'], ['boots', '靴子'], ['furboots', '毛靴'], ['sandals', '涼鞋']],
-  hat: [['none', '無'], ['fluffy', '毛毛帽'], ['hood', '動物兜帽'], ['beanie', '毛線帽'], ['cap', '棒球帽'],
+  shoeStyle: [['maryjane', '娃娃鞋'], ['sneakers', '球鞋'], ['boots', '靴子'], ['furboots', '毛靴'], ['sandals', '涼鞋']],
+  hat: [['none', '無'], ['bow', '蝴蝶結'], ['beanie', '毛線帽'], ['cap', '棒球帽'], ['fluffy', '毛毛帽'], ['hood', '動物兜帽'],
     ['straw', '草帽'], ['beret', '貝雷帽']],
-  ears: [['none', '無'], ['cat', '貓耳'], ['bear', '熊耳'], ['bunny', '兔耳'], ['fox', '狐狸耳'], ['sheep', '羊角']],
+  ears: [['none', '無'], ['bunny', '兔耳髮箍'], ['cat', '貓耳髮箍'], ['bear', '熊耳髮箍'], ['fox', '狐狸耳'], ['sheep', '羊角']],
+  tail: [['none', '無'], ['cat', '貓尾巴'], ['bunny', '兔尾巴'], ['bear', '熊尾巴'], ['fox', '狐狸尾巴']],
   glasses: [['none', '無'], ['round', '圓框'], ['sun', '墨鏡']],
   scarf: [['none', '無'], ['scarf', '圍巾'], ['mask', '忍者蒙面巾']],
   backpack: [['none', '無'], ['square', '方形背包'], ['bunny', '兔兔背包']],
@@ -63,9 +77,9 @@ export const PALETTE = {
   hair: ['#2b2b2b', '#6b4433', '#a0522d', '#e8b04a', '#f6e7b4', '#ffc2d1', '#b197fc', '#a5d8ff', '#f8f9fa', '#ff8787'],
   eyeColor: ['#5b7fd6', '#3b2a20', '#2b2b2b', '#3bc9db', '#51cf66', '#9775fa', '#f76707', '#f06595', '#adb5bd'],
   top: ['#ff9aa2', '#ffe066', '#8ce99a', '#74c0fc', '#b197fc', '#fcc2d7', '#ffffff', '#495057', '#ffa94d', '#1c3d6e', '#a5d8ff', '#b2f2bb'],
-  bottom: ['#6c8cff', '#343a40', '#868e96', '#f1f3f5', '#c9a227', '#2b8a3e', '#c2255c', '#a5d8ff', '#8d6e63', '#212529'],
+  bottom: ['#9fb4ff', '#63e6be', '#6c8cff', '#343a40', '#868e96', '#f1f3f5', '#c9a227', '#2b8a3e', '#c2255c', '#a5d8ff', '#8d6e63', '#212529'],
   legColor: ['#ffffff', '#212529', '#ffc9c9', '#a5d8ff', '#e9ecef', '#d0bfff'],
-  shoes: ['#ffffff', '#343a40', '#ff8787', '#ffe066', '#74c0fc', '#8d6e63', '#96f2d7'],
+  shoes: ['#a0522d', '#ffffff', '#343a40', '#ff8787', '#ffe066', '#74c0fc', '#8d6e63', '#96f2d7'],
   hatColor: ['#ffffff', '#ffe066', '#ff8787', '#74c0fc', '#343a40', '#e8c07d', '#b197fc', '#96f2d7', '#fcc2d7'],
   scarfColor: ['#ff6b6b', '#4dabf7', '#ffffff', '#343a40', '#ffd43b', '#69db7c'],
   backpackColor: ['#8ce99a', '#ffa94d', '#74c0fc', '#f783ac', '#343a40', '#ffe066', '#ffffff'],
@@ -86,7 +100,7 @@ function mesh(geo, material, [x = 0, y = 0, z = 0] = [], [sx = 1, sy = 1, sz = 1
   return m;
 }
 
-const sphere = (r, w = 32, h = 20) => new THREE.SphereGeometry(r, w, h);
+const sphere = (r, w = 24, h = 16) => new THREE.SphereGeometry(r, w, h);
 const capsule = (r, len) => new THREE.CapsuleGeometry(r, len, 8, 16);
 const cyl = (rt, rb, h, seg = 28) => new THREE.CylinderGeometry(rt, rb, h, seg);
 const box = (x, y, z) => new THREE.BoxGeometry(x, y, z);
@@ -151,17 +165,18 @@ const rgba = (hex, a) => {
   return `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${a})`;
 };
 
-const SLEEVES = { tee: 'short', tank: 'none', shirt: 'long', hoodie: 'long', sweater: 'long', jacket: 'long', coat: 'long', dress: 'short', yukata: 'long' };
-const HEAD_SCALE = 0.65; // 頭部零件以「半徑 0.27 的頭」設計，縮放到三頭身比例（頭約佔身高三分之一）
-const HEAD_Y = 0.838;
+const SLEEVES = { tee: 'short', tank: 'none', shirt: 'long', blouse: 'wide', hoodie: 'long', sweater: 'long', jacket: 'long', coat: 'puffy', dress: 'puff', yukata: 'wide' };
+const HEAD_SCALE = 0.85; // 頭部零件以「半徑約 0.28 的頭」設計
+const HEAD_Y = 0.72;
 
 // 舊版設定相容
 export function normalize(cfg) {
   const c = { ...DEFAULT_AVATAR, ...(cfg || {}) };
   if (c.backpack === true) c.backpack = 'square';
   if (c.backpack === false) c.backpack = 'none';
-  if (!OPTIONS.hairStyle.some(o => o[0] === c.hairStyle)) c.hairStyle = 'bob';
-  if (!OPTIONS.bangs.some(o => o[0] === c.bangs)) c.bangs = 'full';
+  for (const k of Object.keys(OPTIONS)) {
+    if (!OPTIONS[k].some(o => o[0] === c[k])) c[k] = DEFAULT_AVATAR[k];
+  }
   return c;
 }
 
@@ -169,71 +184,92 @@ export function normalize(cfg) {
 export function buildAvatar(cfg = {}) {
   const c = normalize(cfg);
   const root = new THREE.Group();
-  const rig = makeSkeleton();
-  root.add(rig.root);
-  rig.root.updateMatrixWorld(true);
-  rig.skeleton.calculateInverses();
-
-  const skin = skinMat(c.skin);
-  const onePiece = c.topStyle === 'dress' || c.topStyle === 'yukata' || c.topStyle === 'coat';
-  const add = (geo, mat) => { const m = skinned(geo, mat, rig); root.add(m); return m; };
+  const body = new THREE.Group(); // 走路時上下彈跳
+  root.add(body);
+  const skin = skinMat(c.skin), top = fabric(c.top), bottom = fabric(c.bottom);
+  const onePiece = ['dress', 'yukata', 'coat'].includes(c.topStyle);
 
   // 影子
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.17, 32), basic(0x000000, { transparent: true, opacity: 0.2, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.2, 32), basic(0x000000, { transparent: true, opacity: 0.2, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.003;
   root.add(shadow);
 
-  // 身體（一整塊光滑的皮膚）
-  add(bodyGeometry(), skin);
-
-  // 內衣（被衣服蓋住的地方看不到）
-  add(shell('brief', 0.0012), fabric('#ffffff'));
-
-  // 襪子 / 褲襪
-  if (c.legwear !== 'none') add(shell(c.legwear, 0.0018), fabric(c.legColor));
+  // 腿：短短的柱子，從髖部整條擺動
+  const legs = [1, -1].map(s => {
+    const p = new THREE.Group();
+    p.position.set(s * 0.047, 0.235, 0);
+    p.add(mesh(capsule(0.038, 0.15), c.legwear === 'tights' ? fabric(c.legColor) : skin, [0, -0.105, 0]));
+    if (c.legwear === 'socks') p.add(mesh(cyl(0.04, 0.04, 0.045), fabric(c.legColor), [0, -0.18, 0]));
+    if (c.legwear === 'knee') p.add(mesh(cyl(0.041, 0.04, 0.11), fabric(c.legColor), [0, -0.15, 0]));
+    if (!onePiece) {
+      if (c.bottomStyle === 'pants') p.add(mesh(cyl(0.046, 0.047, 0.2), bottom, [0, -0.09, 0]));
+      else if (c.bottomStyle === 'shorts' || c.bottomStyle === 'overalls') p.add(mesh(cyl(0.05, 0.053, 0.085), bottom, [0, -0.03, 0]));
+      else if (c.bottomStyle === 'ninja') {
+        p.add(mesh(sphere(0.058), bottom, [0, -0.085, 0], [1, 1.55, 1]));
+        p.add(mesh(cyl(0.041, 0.041, 0.022), fabric(shade(c.bottom, -0.15)), [0, -0.172, 0]));
+      }
+    }
+    addShoe(p, c);
+    body.add(p);
+    return p;
+  });
 
   // 下身
-  const bottom = fabric(c.bottom);
   if (!onePiece) {
-    if (c.bottomStyle === 'pants') { add(shell('pants', 0.004), bottom); add(shell('waist', 0.0035), bottom); }
-    else if (c.bottomStyle === 'shorts') { add(shell('shorts', 0.004), bottom); add(shell('waist', 0.0035), bottom); }
-    else if (c.bottomStyle === 'ninja') {
-      add(shell('pants', 0.014), bottom); add(shell('waist', 0.006), bottom);
-      for (const s of ['L', 'R']) attach(rig, 'lowerLeg' + s, mesh(cyl(0.026, 0.026, 0.018), fabric(shade(c.bottom, -0.15)), [s === 'L' ? 0.046 : -0.046, 0.06, -0.004]));
-    } else if (c.bottomStyle === 'skirt') {
-      add(shell('waist', 0.0035), bottom);
-      root.add(skinnedLathe([[0.0001, 0.325], [0.115, 0.325], [0.112, 0.34], [0.085, 0.42], [0.064, 0.48], [0.0001, 0.49]], 'hips', bottom, rig));
+    if (['pants', 'shorts', 'overalls', 'ninja'].includes(c.bottomStyle)) {
+      body.add(mesh(smoothLathe([[0.0001, 0.165], [0.088, 0.165], [0.097, 0.2], [0.1, 0.25], [0.0001, 0.26]]), bottom));
+    } else if (c.bottomStyle === 'skirt' || c.bottomStyle === 'pinafore') {
+      body.add(mesh(smoothLathe([[0.0001, 0.13], [0.142, 0.13], [0.139, 0.15], [0.108, 0.24], [0.1, 0.28], [0.0001, 0.29]]), bottom));
     } else if (c.bottomStyle === 'longskirt') {
-      add(shell('waist', 0.0035), bottom);
-      root.add(skinnedLathe([[0.0001, 0.06], [0.135, 0.06], [0.132, 0.08], [0.09, 0.36], [0.064, 0.48], [0.0001, 0.49]], 'hips', bottom, rig));
+      body.add(mesh(smoothLathe([[0.0001, 0.035], [0.152, 0.035], [0.149, 0.055], [0.112, 0.2], [0.1, 0.28], [0.0001, 0.29]]), bottom));
     }
   }
 
-  // 上衣
-  const top = fabric(c.top);
-  if (c.topStyle === 'tank') add(shell('torso', 0.0065), top);
-  else add(shell('torsoHigh', c.topStyle === 'coat' ? 0.012 : 0.0065), top);
+  // 上身
+  if (c.topStyle === 'dress') {
+    body.add(mesh(smoothLathe([[0.0001, 0.1], [0.168, 0.1], [0.163, 0.12], [0.11, 0.3], [0.096, 0.4], [0.086, 0.44], [0.058, 0.49], [0.0001, 0.5]]), top, [0, 0, 0], [1, 1, 0.9]));
+  } else {
+    body.add(mesh(smoothLathe([[0.0001, 0.2], [0.093, 0.2], [0.101, 0.24], [0.103, 0.3], [0.097, 0.38], [0.086, 0.44], [0.058, 0.49], [0.0001, 0.5]]), top, [0, 0, 0], [1, 1, 0.88]));
+  }
+  body.add(mesh(cyl(0.036, 0.04, 0.05), skin, [0, 0.5, 0]));
+  addTopDetails(body, c);
+  addBottomDetails(body, c);
+
+  // 手：短短的一節，從肩膀整隻擺動
   const sleeve = SLEEVES[c.topStyle];
-  if (sleeve === 'short') add(shell('sleeveShort', 0.0065), top);
-  if (sleeve === 'long') add(shell('sleeveLong', c.topStyle === 'coat' ? 0.012 : c.topStyle === 'yukata' ? 0.009 : 0.0065), top);
-  addTopDetails(root, rig, c);
+  const arms = [1, -1].map(s => {
+    const p = new THREE.Group();
+    p.position.set(s * 0.088, 0.448, 0);
+    p.rotation.z = s * 0.72;
+    p.add(mesh(sphere(0.037), sleeve === 'none' ? skin : top, [0, 0, 0]));
+    p.add(mesh(capsule(0.03, 0.08), skin, [0, -0.06, 0]));
+    p.add(mesh(sphere(0.036), skin, [0, -0.118, 0]));
+    if (sleeve === 'short') p.add(mesh(cyl(0.04, 0.045, 0.06), top, [0, -0.025, 0]));
+    if (sleeve === 'puff') p.add(mesh(sphere(0.05), top, [0, -0.02, 0], [1, 0.95, 1]));
+    if (sleeve === 'long') p.add(mesh(cyl(0.038, 0.042, 0.105), top, [0, -0.052, 0]));
+    if (sleeve === 'wide') p.add(mesh(cyl(0.04, 0.07, 0.1), top, [0, -0.05, 0]));
+    if (sleeve === 'puffy') {
+      p.add(mesh(capsule(0.048, 0.06), top, [0, -0.045, 0]));
+      p.add(mesh(fluffy(torus(0.04, 0.015), 0.005, 130), fur('#ffffff'), [0, -0.095, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    }
+    body.add(p);
+    return p;
+  });
 
-  // 鞋子
-  for (const s of ['L', 'R']) addShoe(rig, s, c);
-
-  // 頭（沿用原本的大頭零件，縮放後掛在頭骨上）
+  // 頭
   const head = new THREE.Group();
   head.position.set(0, HEAD_Y, 0);
   head.scale.setScalar(HEAD_SCALE);
-  attach(rig, 'head', head);
+  body.add(head);
   head.add(new THREE.Mesh(headGeometries().head, skin));
   for (const side of [-1, 1]) {
-    head.add(mesh(sphere(0.062), skin, [side * 0.262, -0.05, -0.03], [0.45, 1, 0.78], [0, side * -0.35, side * -0.12]));
-    head.add(mesh(sphere(0.034), skinMat(shade(c.skin, -0.06)), [side * 0.282, -0.048, -0.01], [0.25, 1, 0.7], [0, side * -0.35, side * -0.12]));
+    head.add(mesh(sphere(0.055), skin, [side * 0.282, -0.05, -0.02], [0.45, 1, 0.78], [0, side * -0.35, side * -0.12]));
+    head.add(mesh(sphere(0.03), skinMat(shade(c.skin, -0.06)), [side * 0.3, -0.048, 0.0], [0.25, 1, 0.7], [0, side * -0.35, side * -0.12]));
   }
   const face = addFace(head, c);
-  if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.072, 0.248], [1.35, 0.85, 0.7]));
+  if (c.nose === 'animal') head.add(mesh(sphere(0.025), vinyl('#3a2a2a', { roughness: 0.25 }), [0, -0.075, 0.262], [1.35, 0.85, 0.7]));
+  if (c.nose === 'red') head.add(mesh(sphere(0.024), vinyl('#ff6b6b', { roughness: 0.3 }), [0, -0.07, 0.262], [1.15, 1, 0.75]));
   addHair(head, c);
   addEars(head, c);
   addHat(head, c);
@@ -243,13 +279,29 @@ export function buildAvatar(cfg = {}) {
     mk.material.side = THREE.DoubleSide;
     head.add(mk);
   }
-  addAccessories(root, rig, c);
+  addAccessories(body, c);
 
-  // 動畫
+  // 動畫：整隻手腳擺動
   let blinkAt = 2;
-  const smallSteps = c.topStyle === 'yukata' || (c.bottomStyle === 'longskirt' && !onePiece);
+  const step = c.topStyle === 'yukata' || (c.bottomStyle === 'longskirt' && !onePiece) ? 0.5 : 1;
   root.userData.update = (t, walking) => {
-    animate(rig, t, walking, { smallSteps });
+    if (walking) {
+      const s = Math.sin(t * 10);
+      legs[0].rotation.x = s * 0.5 * step;
+      legs[1].rotation.x = -s * 0.5 * step;
+      arms[0].rotation.x = -s * 0.6;
+      arms[1].rotation.x = s * 0.6;
+      body.position.y = Math.abs(Math.cos(t * 10)) * 0.025;
+      body.rotation.z = s * 0.025;
+      head.rotation.z = s * 0.03;
+    } else {
+      legs.forEach(l => (l.rotation.x *= 0.8));
+      arms.forEach((p, i) => (p.rotation.x = Math.sin(t * 1.6 + i) * 0.06));
+      body.position.y = 0;
+      body.rotation.z = 0;
+      head.rotation.z = Math.sin(t * 1.2) * 0.04;
+      body.scale.y = 1 + Math.sin(t * 2.2) * 0.006;
+    }
     const k = t - blinkAt;
     face.blink(k > 0 && k < 0.13);
     if (k > 0.13) blinkAt = t + 2 + Math.random() * 3;
@@ -320,7 +372,7 @@ function faceTexture(c, blink) {
     let kind = c.eyes;
     if (kind === 'wink') kind = side > 0 ? 'happy' : 'sparkle';
     if (blink && !['happy', 'sleepy'].includes(kind)) kind = 'closed';
-    drawEye(g, fx(side * (kind === 'doll' ? 24.5 : 23)), fy(-10), side, kind, c.eyeColor);
+    drawEye(g, fx(side * (kind === 'doll' ? 24.5 : kind === 'bean' ? 21 : 23)), fy(-10), side, kind, c.eyeColor);
   }
 
   // 眉毛
@@ -379,6 +431,14 @@ function drawEye(g, x, y, side, kind, color) {
     g.beginPath(); g.ellipse(x, y + 18, W * 0.75, H * 0.32, 0, 0, Math.PI); g.fill();
     g.lineWidth = 11;
     g.beginPath(); g.moveTo(x - W * 0.85, y + 14); g.quadraticCurveTo(x, y + 4, x + W * 0.85, y + 14); g.stroke();
+    return;
+  }
+  if (kind === 'bean') {
+    g.fillStyle = lash;
+    g.beginPath(); g.ellipse(x, y, 30, 40, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(x - 9, y - 14, 9, 11, -0.3, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(x + 9, y + 15, 4.5, 0, Math.PI * 2); g.fill();
     return;
   }
   if (kind === 'dot') {
@@ -537,60 +597,78 @@ function drawMouth(g, x, y, kind) {
 }
 
 /* ---------------- 身體細節（座標都用靜止姿勢的世界座標） ---------------- */
-function addShoe(rig, s, c) {
-  const x = s === 'L' ? 0.047 : -0.047;
+function addShoe(p, c) {
   const shoe = vinyl(c.shoes);
-  const g = new THREE.Group();
   if (c.shoeStyle === 'boots' || c.shoeStyle === 'furboots') {
-    g.add(mesh(cyl(0.027, 0.026, 0.06), shoe, [x, 0.05, -0.003]));
-    g.add(mesh(sphere(0.029), shoe, [x, 0.02, 0.016], [1, 0.75, 1.65]));
-    g.add(mesh(sphere(0.03), vinyl(shade(c.shoes, -0.25)), [x, 0.007, 0.016], [1.03, 0.28, 1.68]));
-    if (c.shoeStyle === 'furboots') g.add(mesh(fluffy(torus(0.028, 0.012), 0.005, 130), fur('#fffaf0'), [x, 0.08, -0.003], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    p.add(mesh(cyl(0.046, 0.045, 0.1), shoe, [0, -0.165, 0]));
+    p.add(mesh(sphere(0.047), shoe, [0, -0.2, 0.012], [1, 0.72, 1.3]));
+    p.add(mesh(sphere(0.049), vinyl(shade(c.shoes, -0.25)), [0, -0.217, 0.012], [1.02, 0.25, 1.33]));
+    if (c.shoeStyle === 'furboots') p.add(mesh(fluffy(torus(0.047, 0.016), 0.005, 130), fur('#fffaf0'), [0, -0.112, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
   } else if (c.shoeStyle === 'sandals') {
-    g.add(mesh(box(0.05, 0.009, 0.1), shoe, [x, 0.004, 0.016]));
-    g.add(mesh(torus(0.025, 0.005, Math.PI), shoe, [x, 0.012, 0.03], [1, 1, 1], [0, Math.PI / 2, 0]));
+    p.add(mesh(box(0.075, 0.012, 0.12), shoe, [0, -0.223, 0.012]));
+    p.add(mesh(torus(0.04, 0.007, Math.PI), shoe, [0, -0.212, 0.03], [1, 1, 1], [0, Math.PI / 2, 0]));
+  } else if (c.shoeStyle === 'maryjane') {
+    p.add(mesh(sphere(0.045), shoe, [0, -0.2, 0.012], [1, 0.68, 1.32]));
+    p.add(mesh(torus(0.041, 0.006, Math.PI), shoe, [0, -0.2, 0.0], [1, 1, 1], [0, Math.PI / 2, 0]));
+    p.add(mesh(sphere(0.047), vinyl(shade(c.shoes, -0.2)), [0, -0.216, 0.012], [1.02, 0.25, 1.34]));
   } else {
-    g.add(mesh(sphere(0.029), shoe, [x, 0.021, 0.016], [1, 0.78, 1.65]));
-    g.add(mesh(sphere(0.03), vinyl('#f1f3f5'), [x, 0.008, 0.016], [1.05, 0.3, 1.7]));
+    p.add(mesh(sphere(0.046), shoe, [0, -0.2, 0.012], [1, 0.72, 1.35]));
+    p.add(mesh(sphere(0.048), vinyl('#f1f3f5'), [0, -0.216, 0.012], [1.03, 0.26, 1.38]));
   }
-  attach(rig, 'foot' + s, g);
 }
 
-function addTopDetails(root, rig, c) {
+// 胸前表面大約的 z
+const frontZ = y => (y > 0.44 ? 0.076 - (y - 0.44) * 0.5 : y > 0.38 ? 0.083 : 0.09);
+
+function peterPan(body, color) {
+  for (const s of [-1, 1]) body.add(mesh(sphere(0.052), fabric(color), [s * 0.036, 0.478, 0.045], [1, 0.24, 0.8], [0.3, 0, s * 0.2]));
+}
+
+function addTopDetails(body, c) {
   const s = c.topStyle;
   const top = fabric(c.top), darker = fabric(shade(c.top, -0.1)), lighter = fabric(shade(c.top, 0.22));
-  const on = (bone, obj) => attach(rig, bone, obj);
-  const fz = y => (y > 0.5 ? 0.055 : 0.053); // 胸前表面大約的 z
-  if (s === 'hoodie') {
-    on('chest', mesh(torus(0.045, 0.018), top, [0, 0.635, -0.032], [1, 0.75, 1], [-0.3, 0, 0]));
-    on('spine', mesh(box(0.07, 0.028, 0.008), darker, [0, 0.47, 0.052]));
-    for (const x of [-0.014, 0.014]) on('chest', mesh(cyl(0.0018, 0.0018, 0.04, 6), fabric('#ffffff'), [x, 0.6, 0.056]));
+  if (s === 'blouse') {
+    peterPan(body, '#ffffff');
+  } else if (s === 'hoodie') {
+    body.add(mesh(torus(0.06, 0.024), top, [0, 0.49, -0.045], [1, 0.72, 1], [-0.3, 0, 0]));
+    body.add(mesh(box(0.095, 0.036, 0.01), darker, [0, 0.27, 0.093]));
+    for (const x of [-0.017, 0.017]) body.add(mesh(cyl(0.0025, 0.0025, 0.055, 6), fabric('#ffffff'), [x, 0.445, frontZ(0.445) + 0.006]));
   } else if (s === 'shirt') {
-    for (const side of [-1, 1]) on('chest', mesh(box(0.035, 0.01, 0.022), lighter, [side * 0.018, 0.64, 0.035], [1, 1, 1], [0.5, 0, side * -0.5]));
-    for (const y of [0.6, 0.57, 0.54]) on('chest', mesh(sphere(0.005, 10, 8), vinyl('#ffffff'), [0, y, fz(y) + 0.004]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.05, 0.012, 0.03), lighter, [side * 0.026, 0.49, 0.05], [1, 1, 1], [0.5, 0, side * -0.5]));
+    for (const y of [0.43, 0.38, 0.33, 0.28]) body.add(mesh(sphere(0.007, 10, 8), vinyl('#ffffff'), [0, y, frontZ(y) + 0.003]));
   } else if (s === 'sweater') {
-    on('chest', mesh(fluffy(torus(0.032, 0.014), 0.004, 150), fur('#ffffff'), [0, 0.642, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
-    for (const y of [0.6, 0.565, 0.53]) on('chest', mesh(sphere(0.009, 16, 12), vinyl('#ffffff'), [0, y, fz(y) + 0.004], [1, 1, 0.6]));
+    body.add(mesh(torus(0.1, 0.013), darker, [0, 0.207, 0], [1, 0.88, 1], [Math.PI / 2, 0, 0]));
+    body.add(mesh(fluffy(torus(0.05, 0.02), 0.005, 130), fur('#ffffff'), [0, 0.493, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    for (const y of [0.42, 0.36, 0.3]) body.add(mesh(sphere(0.013, 16, 12), vinyl('#ffffff'), [0, y, frontZ(y) + 0.003], [1, 1, 0.6]));
   } else if (s === 'jacket') {
-    on('chest', mesh(box(0.026, 0.09, 0.005), fabric('#f8f9fa'), [0, 0.57, 0.054]));
-    for (const side of [-1, 1]) on('chest', mesh(box(0.014, 0.045, 0.007), darker, [side * 0.022, 0.605, 0.052], [1, 1, 1], [0, 0, side * 0.35]));
+    body.add(mesh(box(0.035, 0.22, 0.006), fabric('#f8f9fa'), [0, 0.35, 0.087]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.02, 0.07, 0.008), darker, [side * 0.03, 0.44, frontZ(0.44)], [1, 1, 1], [0, 0, side * 0.35]));
   } else if (s === 'coat') {
-    root.add(skinnedLathe([[0.0001, 0.25], [0.125, 0.25], [0.123, 0.265], [0.095, 0.38], [0.075, 0.47], [0.0001, 0.48]], 'hips', top, rig));
-    on('hips', mesh(fluffy(torus(0.123, 0.015), 0.005, 120), fur('#ffffff'), [0, 0.255, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(fluffy(torus(0.034, 0.018), 0.005, 130), fur('#ffffff'), [0, 0.64, 0.004], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
-    for (const side of [-1, 1]) {
-      on('hips', mesh(box(0.038, 0.03, 0.007), darker, [side * 0.052, 0.34, 0.096], [1, 1, 1], [-0.25, side * 0.45, 0]));
-      on('lowerArm' + (side > 0 ? 'L' : 'R'), mesh(fluffy(torus(0.022, 0.01), 0.004, 150), fur('#ffffff'),
-        [side * 0.185, 0.462, 0], [1, 1, 1], [Math.PI / 2, 0, side * 0.75]));
-    }
-    for (const y of [0.6, 0.55]) on('chest', mesh(sphere(0.009, 16, 12), vinyl(shade(c.top, -0.25)), [0.013, y, fz(y) + 0.011], [1, 1, 0.6]));
+    body.add(mesh(smoothLathe([[0.0001, 0.12], [0.142, 0.12], [0.139, 0.14], [0.11, 0.28], [0.102, 0.36], [0.0001, 0.37]]), top));
+    body.add(mesh(fluffy(torus(0.14, 0.017), 0.006, 110), fur('#ffffff'), [0, 0.126, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    body.add(mesh(fluffy(torus(0.055, 0.025), 0.006, 120), fur('#ffffff'), [0, 0.49, 0.004], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.05, 0.04, 0.008), darker, [side * 0.062, 0.21, 0.122], [1, 1, 1], [-0.2, side * 0.45, 0]));
+    for (const y of [0.42, 0.35]) body.add(mesh(sphere(0.012, 16, 12), vinyl(shade(c.top, -0.25)), [0.02, y, frontZ(y) + 0.008], [1, 1, 0.6]));
   } else if (s === 'yukata') {
-    root.add(skinnedLathe([[0.0001, 0.03], [0.1, 0.03], [0.1, 0.05], [0.085, 0.3], [0.068, 0.47], [0.0001, 0.48]], 'hips', top, rig));
-    on('spine', mesh(cyl(0.066, 0.066, 0.04, 32), fabric(c.bottom), [0, 0.475, 0.002], [1, 1, 0.85]));
-    for (const side of [-1, 1]) on('chest', mesh(box(0.011, 0.06, 0.005), fabric('#ffffff'), [side * 0.014, 0.6, 0.054], [1, 1, 1], [0, 0, side * 0.5]));
+    body.add(mesh(smoothLathe([[0.0001, 0.03], [0.118, 0.03], [0.118, 0.05], [0.106, 0.25], [0.102, 0.3], [0.0001, 0.31]]), top));
+    body.add(mesh(cyl(0.106, 0.106, 0.05, 32), fabric(c.bottom), [0, 0.29, 0], [1, 1, 0.9]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.014, 0.09, 0.006), fabric('#ffffff'), [side * 0.02, 0.45, frontZ(0.45) + 0.002], [1, 1, 1], [0, 0, side * 0.5]));
   } else if (s === 'dress') {
-    root.add(skinnedLathe([[0.0001, 0.3], [0.13, 0.3], [0.127, 0.32], [0.085, 0.44], [0.064, 0.53], [0.0001, 0.54]], 'hips', top, rig));
-    on('chest', mesh(torus(0.03, 0.007), lighter, [0, 0.637, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    peterPan(body, '#ffffff');
+  }
+}
+
+function addBottomDetails(body, c) {
+  if (['dress', 'yukata', 'coat'].includes(c.topStyle)) return;
+  if (c.bottomStyle === 'overalls' || c.bottomStyle === 'pinafore') {
+    const m = fabric(c.bottom);
+    body.add(mesh(box(0.115, 0.1, 0.014), m, [0, 0.31, 0.093]));
+    body.add(mesh(box(0.045, 0.03, 0.006), fabric('#ffffff'), [0, 0.32, 0.101]));
+    for (const s of [-1, 1]) {
+      body.add(mesh(box(0.02, 0.14, 0.008), m, [s * 0.042, 0.41, 0.083], [1, 1, 1], [-0.22, 0, 0]));
+      body.add(mesh(box(0.02, 0.2, 0.008), m, [s * 0.042, 0.38, -0.086], [1, 1, 1], [0.12, 0, 0]));
+      body.add(mesh(sphere(0.009, 12, 8), vinyl('#ffe066'), [s * 0.042, 0.355, 0.1]));
+    }
   }
 }
 
@@ -617,14 +695,17 @@ function addHair(head, c) {
 
 function addEars(head, c) {
   if (c.ears === 'none' || c.hat === 'hood') return;
-  addAnimalEars(head, c.ears, c.ears === 'fox' ? vinyl('#ff922b') : vinyl(c.hair, { roughness: 0.38 }), 1);
+  if (['bunny', 'cat', 'bear'].includes(c.ears)) {
+    head.add(mesh(torus(0.315, 0.013, Math.PI), vinyl(shade(c.hatColor, -0.1)), [0, 0.01, 0.02], [1, 1.04, 1]));
+  }
+  addAnimalEars(head, c.ears, c.ears === 'fox' ? vinyl('#ff922b') : c.ears === 'bunny' ? vinyl('#ffffff') : vinyl(c.hair, { roughness: 0.38 }), 1);
 }
 
 function addAnimalEars(head, kind, color, scale, onHood = false) {
   const inner = vinyl('#ffc9d6');
   for (const side of [-1, 1]) {
     const g = new THREE.Group();
-    g.position.set(side * (onHood ? 0.2 : 0.17), onHood ? 0.31 : 0.23, onHood ? -0.07 : -0.02);
+    g.position.set(side * (onHood ? 0.2 : 0.16), onHood ? 0.31 : 0.3, onHood ? -0.07 : 0.01);
     g.rotation.z = -side * 0.35;
     g.scale.setScalar(scale);
     if (kind === 'bear') {
@@ -649,10 +730,21 @@ function addHat(parent, c) {
   if (c.hat === 'none') return;
   // 帽子零件是照舊版較矮的頭設計的，整組往上移、放大一點以配合新頭型
   const head = new THREE.Group();
-  head.position.y = 0.035;
-  head.scale.setScalar(1.05);
+  head.position.y = 0.02;
+  head.scale.setScalar(1.04);
   parent.add(head);
   const m = fabric(c.hatColor);
+  if (c.hat === 'bow') {
+    const bow = vinyl(c.hatColor, { roughness: 0.5 });
+    const g = new THREE.Group();
+    g.position.set(0, 0.3, 0.06);
+    g.rotation.x = -0.35;
+    for (const s of [-1, 1]) g.add(mesh(sphere(0.075), bow, [s * 0.075, 0.01, 0], [1.25, 0.8, 0.45], [0, 0, s * -0.35]));
+    g.add(mesh(sphere(0.035), bow, [0, 0.005, 0.01], [1, 0.95, 0.75]));
+    head.add(g);
+    parent.add(head);
+    return;
+  }
   if (c.hat === 'fluffy') {
     // 毛毛帽：大大的毛帽 + 兩側毛球
     const furry = fur(c.hatColor);
@@ -700,37 +792,57 @@ function addGlasses(head, c) {
   head.add(mesh(box(0.05, 0.012, 0.012), frame, [0, -0.03, 0.272]));
 }
 
-function addAccessories(root, rig, c) {
-  const on = (bone, obj) => attach(rig, bone, obj);
+function addAccessories(body, c) {
   if (c.backpack !== 'none') {
     const bp = vinyl(c.backpackColor);
     if (c.backpack === 'bunny') {
-      on('chest', mesh(sphere(0.07), bp, [0, 0.53, -0.09], [1, 1.05, 0.62]));
-      on('chest', mesh(sphere(0.036), vinyl('#ffffff'), [0, 0.52, -0.13], [1, 1, 0.5]));
+      body.add(mesh(sphere(0.085), bp, [0, 0.33, -0.125], [1, 1.05, 0.62]));
+      body.add(mesh(sphere(0.042), vinyl('#ffffff'), [0, 0.32, -0.172], [1, 1, 0.5]));
       for (const side of [-1, 1]) {
-        on('chest', mesh(capsule(0.016, 0.05), bp, [side * 0.03, 0.62, -0.09], [1, 1, 0.6], [0, 0, side * -0.25]));
-        on('chest', mesh(sphere(0.005), vinyl('#2b2b2b'), [side * 0.013, 0.53, -0.145]));
+        body.add(mesh(capsule(0.02, 0.06), bp, [side * 0.036, 0.43, -0.125], [1, 1, 0.6], [0, 0, side * -0.25]));
+        body.add(mesh(sphere(0.006), vinyl('#2b2b2b'), [side * 0.016, 0.335, -0.18]));
       }
     } else {
-      on('chest', mesh(box(0.12, 0.12, 0.05), bp, [0, 0.54, -0.08]));
-      on('chest', mesh(box(0.09, 0.045, 0.018), vinyl(shade(c.backpackColor, -0.12)), [0, 0.51, -0.112]));
-      on('chest', mesh(sphere(0.06, 24, 12), bp, [0, 0.6, -0.08], [1, 0.32, 0.42]));
+      body.add(mesh(box(0.15, 0.15, 0.065), bp, [0, 0.34, -0.12]));
+      body.add(mesh(box(0.11, 0.055, 0.02), vinyl(shade(c.backpackColor, -0.12)), [0, 0.305, -0.157]));
+      body.add(mesh(sphere(0.075, 24, 12), bp, [0, 0.415, -0.12], [1, 0.32, 0.45]));
     }
-    for (const side of [-1, 1]) on('chest', mesh(box(0.012, 0.09, 0.005), vinyl(shade(c.backpackColor, -0.2)), [side * 0.034, 0.567, 0.054]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.015, 0.13, 0.006), vinyl(shade(c.backpackColor, -0.2)), [side * 0.05, 0.37, 0.088]));
   }
   if (c.scarf === 'scarf') {
     const sc = fabric(c.scarfColor);
-    on('chest', mesh(torus(0.034, 0.017), sc, [0, 0.642, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(box(0.026, 0.07, 0.01), sc, [0.026, 0.6, 0.058], [1, 1, 1], [0.1, 0, 0.12]));
+    body.add(mesh(torus(0.056, 0.024), sc, [0, 0.493, 0.003], [1.1, 1, 1], [Math.PI / 2, 0, 0]));
+    body.add(mesh(box(0.035, 0.09, 0.012), sc, [0.035, 0.43, 0.088], [1, 1, 1], [0.1, 0, 0.12]));
   } else if (c.scarf === 'mask') {
     const sc = fabric(c.scarfColor);
-    for (const side of [-1, 1]) on('neck', mesh(box(0.02, 0.09, 0.005), sc, [side * 0.022, 0.71, -0.15], [1, 1, 1], [0.7, 0, side * 0.3]));
+    for (const side of [-1, 1]) body.add(mesh(box(0.025, 0.11, 0.006), sc, [side * 0.03, 0.6, -0.245], [1, 1, 1], [0.7, 0, side * 0.3]));
   }
   if (c.camera) {
-    on('chest', mesh(torus(0.055, 0.0038, Math.PI), vinyl('#343a40'), [0, 0.636, 0.052], [0.72, 1, 1], [0, 0, Math.PI]));
-    on('chest', mesh(box(0.05, 0.034, 0.024), vinyl('#495057'), [0, 0.55, 0.066]));
-    on('chest', mesh(cyl(0.011, 0.011, 0.016, 16), vinyl('#212529'), [0, 0.55, 0.082], [1, 1, 1], [Math.PI / 2, 0, 0]));
-    on('chest', mesh(sphere(0.005, 8, 6), vinyl('#74c0fc', { roughness: 0.1 }), [0, 0.55, 0.09]));
+    body.add(mesh(torus(0.075, 0.004, Math.PI), vinyl('#343a40'), [0, 0.49, 0.07], [0.8, 1, 1], [0, 0, Math.PI]));
+    body.add(mesh(box(0.065, 0.045, 0.03), vinyl('#495057'), [0, 0.39, 0.1]));
+    body.add(mesh(cyl(0.014, 0.014, 0.02, 16), vinyl('#212529'), [0, 0.39, 0.12], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    body.add(mesh(sphere(0.006, 8, 6), vinyl('#74c0fc', { roughness: 0.1 }), [0, 0.39, 0.13]));
+  }
+  addTail(body, c);
+}
+
+function addTail(body, c) {
+  if (c.tail === 'none') return;
+  const color = c.tail === 'fox' ? vinyl('#ff922b') : c.tail === 'bunny' ? fur('#ffffff') : vinyl(c.hair, { roughness: 0.5 });
+  if (c.tail === 'bunny') {
+    body.add(mesh(fluffy(new THREE.IcosahedronGeometry(0.04, 4), 0.006, 110), color, [0, 0.21, -0.1]));
+  } else if (c.tail === 'bear') {
+    body.add(mesh(sphere(0.03), color, [0, 0.21, -0.098]));
+  } else {
+    // 彎彎的尾巴
+    const pts = c.tail === 'cat'
+      ? [[0, 0.21, -0.09], [0.02, 0.2, -0.16], [0.06, 0.24, -0.21], [0.08, 0.32, -0.2], [0.06, 0.37, -0.17]]
+      : [[0, 0.21, -0.09], [0.02, 0.2, -0.17], [0.05, 0.25, -0.24]];
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
+    const r = c.tail === 'cat' ? 0.013 : 0.035;
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, r, 12, false), color));
+    const end = pts[pts.length - 1];
+    body.add(mesh(sphere(c.tail === 'fox' ? 0.04 : r), c.tail === 'fox' ? fur('#ffffff') : color, end));
   }
 }
 

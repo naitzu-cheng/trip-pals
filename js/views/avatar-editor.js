@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { html, Segmented, toast, errMsg } from '../ui.js';
-import { buildAvatar, addLights, disposeTree, normalize, OPTIONS, PALETTE } from '../avatar.js';
+import { buildAvatar, addLights, disposeTree, normalize, OPTIONS, PALETTE, PRESETS } from '../avatar.js';
 
 export function AvatarPreview({ config, height = 260, spin = true, walking = false }) {
   const host = useRef();
@@ -80,7 +80,7 @@ const SECTIONS = [
   ['衣服', [['topStyle', '上衣'], ['top', '上衣顏色', 'color'], ['bottomStyle', '下身'], ['bottom', '下身顏色（浴衣＝腰帶顏色）', 'color'],
     ['legwear', '襪子 / 褲襪'], ['legColor', '襪子顏色', 'color']]],
   ['鞋子', [['shoeStyle', '款式'], ['shoes', '鞋子顏色', 'color']]],
-  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵（兜帽也會用這個）'], ['glasses', '眼鏡'],
+  ['配件', [['hat', '帽子'], ['hatColor', '帽子顏色', 'color'], ['ears', '動物耳朵（兜帽也會用這個）'], ['tail', '尾巴'], ['glasses', '眼鏡'],
     ['scarf', '圍巾'], ['scarfColor', '圍巾顏色', 'color'], ['backpack', '背包'], ['backpackColor', '背包顏色', 'color'],
     ['camera', '相機', 'bool']]],
 ];
@@ -115,6 +115,12 @@ export function AvatarEditor({ initial, name: initialName, onSave, onCancel }) {
     <div class="avatar-editor">
       <div class="avatar-stage">
         <${AvatarPreview} config=${cfg} height=${280} walking=${walk} />
+        <div class="preset-btns">
+          <button class="chip" onClick=${() => setCfg(normalize(PRESETS.girl))}>👧 女生</button>
+          <button class="chip" onClick=${() => setCfg(normalize(PRESETS.boy))}>👦 男生</button>
+          <button class="chip" onClick=${() => setCfg(normalize(PRESETS.bunny))}>🐰 兔兔</button>
+          <button class="chip" onClick=${() => setCfg(normalize(PRESETS.cat))}>🐱 貓貓</button>
+        </div>
         <div class="stage-btns">
           <button class="chip" onClick=${random}>🎲 隨機</button>
           <button class=${'chip' + (walk ? ' on' : '')} onClick=${() => setWalk(w => !w)}>🚶 走路</button>

@@ -1,9 +1,11 @@
 // 🎫 票券與訂位：機票、車票、住宿、門票…（同行人共享）
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { html, Sheet, Field, Empty, ImageGrid, ImagePicker, Lightbox, toast, errMsg, fmtDate, confirmBox } from '../ui.js';
 import { BOOKING_KINDS, bookingKind } from '../consts.js';
 import { googleMapsSearch } from '../geo.js';
 import { groupStops, stopLabel } from '../itin.js';
+import { compressImage } from '../images.js';
+import { scanImage, parseScan, FIELD_NAMES } from '../scan.js';
 
 const fmtWhen = s => s ? `${fmtDate(s.slice(0, 10))} ${s.slice(11, 16)}` : '';
 
@@ -88,8 +90,40 @@ function BookingForm({ app, item, stops, onClose, onSaved }) {
   const { store, trip } = app;
   const [f, setF] = useState({ kind: 'flight', title: '', ref_code: '', start_at: '', end_at: '', place: '', note: '', images: [], itinerary_id: null, ...item });
   const [saving, setSaving] = useState(false);
+  const [scan, setScan] = useState(null); // { p, msg } 掃描中；{ filled: [...] } 掃描完
+  const fileRef = useRef();
+  const fRef = useRef(f);
+  fRef.current = f; // 掃描完成時用最新的表單內容（掃描中使用者可能有打字）
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const groups = groupStops(stops, trip);
+
+  // 🔍 掃描截圖：辨識後只填入「還空著」的欄位，截圖本身也存起來
+  const onScan = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setScan({ p: 0, msg: '準備中…' });
+    try {
+      const [found, ref] = await Promise.all([
+        scanImage(file, (p, msg) => setScan({ p, msg })).then(r => parseScan(r, trip.start_date)),
+        compressImage(file).then(b => store.uploadImage(b, { shared: true })).catch(err => { errMsg(err); return null; }),
+      ]);
+      const x = fRef.current, filled = [];
+      const next = { ...x, images: ref ? [...(x.images || []), ref] : x.images };
+      for (const [k, v] of Object.entries(found)) {
+        if (!v) continue;
+        const empty = k === 'kind' ? !item.id && x.kind === 'flight' && !x.title : !x[k];
+        if (empty) { next[k] = v; filled.push(FIELD_NAMES[k] || k); }
+        else if (k === 'note' && !(x.note || '').includes(v)) { next.note = (x.note || '') + '\n' + v; filled.push(FIELD_NAMES[k]); }
+      }
+      setF(next);
+      const order = Object.values(FIELD_NAMES);
+      setScan({ filled: [...new Set(filled)].sort((a, b) => order.indexOf(a) - order.indexOf(b)) });
+    } catch (err) {
+      errMsg(err);
+      setScan(null);
+    }
+  };
 
   const save = async e => {
     e.preventDefault();
@@ -112,6 +146,14 @@ function BookingForm({ app, item, stops, onClose, onSaved }) {
   return html`
     <${Sheet} title=${item.id ? '編輯票券' : '新增票券／訂位'} onClose=${onClose}>
       <form class="form" onSubmit=${save}>
+        <button type="button" class="btn ghost block scan-btn" disabled=${scan && !scan.filled} onClick=${() => fileRef.current.click()}>
+          ${scan && !scan.filled ? `🔍 ${scan.msg} ${Math.round(scan.p * 100)}%` : '🔍 掃描截圖自動填入'}</button>
+        <input ref=${fileRef} type="file" accept="image/*" hidden onChange=${onScan} />
+        ${scan && !scan.filled && html`<div class="scan-bar"><i style=${{ width: Math.round(scan.p * 100) + '%' }}></i></div>`}
+        ${scan?.filled && html`<div class="hint">${scan.filled.length
+          ? `✨ 已自動填入：${scan.filled.join('、')}。辨識可能有錯，請確認一下！`
+          : '沒辨識到資料，截圖已經加入，請手動填寫。'}</div>`}
+        ${!scan && !item.id && html`<div class="muted small-text">選一張電子機票、訂房確認信、車票或登機證的截圖，會自動讀出訂位代號、時間等資料</div>`}
         <div class="chips wrap tight">
           ${BOOKING_KINDS.map(([k, icon, label]) => html`<button type="button" class=${'chip' + (f.kind === k ? ' on' : '')}
             onClick=${() => set('kind', k)}>${icon} ${label}</button>`)}

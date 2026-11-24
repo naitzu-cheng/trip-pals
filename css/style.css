@@ -425,3 +425,8 @@ input.input[type='date'], input.input[type='time'] { -webkit-appearance: none; a
 .mem-day { margin: 16px 0; }
 .memory { margin: 10px 0; }
 .mem-caption { white-space: pre-wrap; margin: 8px 0 4px; }
+
+/* ---------- 掃描票券 ---------- */
+.scan-btn { border-style: dashed; }
+.scan-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.scan-bar i { display: block; height: 100%; background: var(--green); transition: width .3s; }

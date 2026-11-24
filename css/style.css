@@ -366,3 +366,62 @@ textarea.input { resize: vertical; }
 /* iPhone 的日期 / 時間欄位不要撐出畫面 */
 .field { min-width: 0; }
 input.input[type='date'], input.input[type='time'] { -webkit-appearance: none; appearance: none; min-width: 0; display: block; min-height: 44px; }
+
+/* ---------- 行程分頁（行程／票券／回憶） ---------- */
+.plan-seg { padding: 12px 16px 0; }
+.small-text { font-size: .8rem; }
+.sec-title { font-size: 1rem; margin: 18px 0 4px; }
+.push { margin-left: auto; }
+.offline-bar { background: #495057; color: #fff; font-size: .8rem; padding: 6px 12px; text-align: center; }
+.wx { font-size: .82rem; color: var(--ink); background: #eef6ff; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.wx small { color: #1c7ed6; margin-left: 4px; }
+.tl-ticket {
+  display: block; margin-top: 6px; border: none; background: #fff4d6; color: var(--ink); border-radius: 8px;
+  padding: 3px 8px; font-size: .8rem; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.export-preview { font-size: .82rem; font-family: inherit; }
+
+/* ---------- 記帳 ---------- */
+.money-big { display: flex; gap: 12px; }
+.money-big > div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.money-big small { color: var(--muted); }
+.money-big b { font-size: 1.3rem; overflow-wrap: anywhere; }
+.cat-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 14px 0 8px; background: var(--line); }
+.cat-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .8rem; color: var(--muted); margin-bottom: 10px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.c-food { background: #ff922b; } .c-transport { background: #4dabf7; } .c-stay { background: #9775fa; }
+.c-ticket { background: #f06595; } .c-shop { background: #51cf66; } .c-other { background: #adb5bd; }
+.sm-input { width: auto; padding: 4px 8px; font-size: .85rem; }
+.settle-row { display: flex; align-items: center; gap: 10px; margin: 0; padding: 12px 14px; }
+.settle-amt { font-weight: 800; color: var(--orange); }
+.exp-day { margin: 10px 0; }
+.exp-day-head { display: flex; justify-content: space-between; font-size: .82rem; margin: 6px 2px; }
+.exp-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; padding: 10px 12px; cursor: pointer; }
+.exp-icon { font-size: 1.4rem; width: 36px; height: 36px; border-radius: 12px; background: #f8f3e6; display: grid; place-items: center; flex: none; }
+.exp-main { min-width: 0; }
+.exp-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-amt { text-align: right; display: flex; flex-direction: column; flex: none; }
+.shares { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.share-row { display: flex; align-items: center; gap: 10px; }
+.share-row span { flex: 1; }
+.share-row .input { width: 130px; }
+.guest-row { padding: 4px 0; border-bottom: 1px solid var(--line); }
+
+/* ---------- 票券 ---------- */
+.booking { display: flex; align-items: center; gap: 12px; margin: 0; cursor: pointer; }
+.booking.past { opacity: .55; }
+.booking-icon { font-size: 1.6rem; width: 44px; height: 44px; border-radius: 14px; background: #eef6ff; display: grid; place-items: center; flex: none; }
+.booking-main { min-width: 0; }
+.booking-title { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-code {
+  display: inline-block; margin-top: 4px; font-family: ui-monospace, Menlo, monospace; font-weight: 800; letter-spacing: .05em;
+  background: #fff4d6; border: none; border-radius: 8px; padding: 2px 8px; color: var(--ink); cursor: pointer;
+}
+.ref-code small { font-family: inherit; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.ref-code.big { font-size: 1.4rem; padding: 8px 14px; align-self: flex-start; }
+.booking-detail a { color: var(--blue); }
+
+/* ---------- 回憶 ---------- */
+.mem-day { margin: 16px 0; }
+.memory { margin: 10px 0; }
+.mem-caption { white-space: pre-wrap; margin: 8px 0 4px; }

@@ -2,18 +2,36 @@ import { useState, useEffect } from 'preact/hooks';
 import { html, Sheet, Field, Empty, toast, errMsg, fmtDate, daysBetween, confirmBox } from '../ui.js';
 import { searchPlaces, googleMapsSearch, googleMapsDirections } from '../geo.js';
 import { TRANSPORT_MODES, transportOf } from '../consts.js';
+import { dailyWeather, weatherIcon } from '../weather.js';
+import { itineraryText, itineraryImage, shareOrDownload } from '../export.js';
 import { groupStops, stopLabel, saveOrder } from '../itin.js';
 
-export function ItineraryView({ app }) {
+export function ItineraryView({ app, onOpenBooking }) {
   const { store, trip } = app;
   const [items, setItems] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [wx, setWx] = useState({});
+  const [exporting, setExporting] = useState(false);
   const [edit, setEdit] = useState(null);
   const [sorting, setSorting] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     store.list('itinerary', { trip_id: trip.id }).then(setItems).catch(errMsg);
+    store.list('bookings', { trip_id: trip.id }).then(setBookings).catch(() => {});
   }, [trip.id, app.version]);
+
+  // 每天的天氣：用那天第一個有座標的行程，沒有就用旅程目的地
+  useEffect(() => {
+    if (!items) return;
+    const pts = daysBetween(trip.start_date, trip.end_date).map(day => {
+      const p = items.find(s => s.day === day && s.lat != null) || trip.center;
+      return p ? { day, lat: p.lat, lng: p.lng } : null;
+    }).filter(Boolean);
+    let alive = true;
+    dailyWeather(pts).then(w => alive && setWx(w)).catch(() => {});
+    return () => { alive = false; };
+  }, [items, trip.center?.lat, trip.start_date, trip.end_date]);
 
   if (!items) return html`<div class="loading">載入中…</div>`;
   const days = daysBetween(trip.start_date, trip.end_date);
@@ -42,6 +60,7 @@ export function ItineraryView({ app }) {
         <div class="row gap">
           ${items.length > 1 && html`<button class=${'btn sm ' + (sorting ? 'primary' : 'ghost')} onClick=${() => setSorting(!sorting)}>
             ${sorting ? '✓ 完成' : '↕️ 排序'}</button>`}
+          ${!sorting && items.length > 0 && html`<button class="btn ghost sm" onClick=${() => setExporting(true)}>📤 分享</button>`}
           ${!sorting && html`<button class="btn primary sm" onClick=${() => setEdit({ day: days[0] || null })}>＋ 新增</button>`}
         </div>
       </div>
@@ -53,6 +72,9 @@ export function ItineraryView({ app }) {
           <div class="day-head">
             <span class="day-no" style=${{ background: g.color }}>${g.day ? `Day ${g.dayNo ?? '+'}` : '未排日期'}</span>
             <span class="muted">${g.day ? fmtDate(g.day) : ''}</span>
+            ${wx[g.day] && html`<span class="wx" title=${weatherIcon(wx[g.day].code).label}>
+              ${weatherIcon(wx[g.day].code).icon} ${Math.round(wx[g.day].min)}–${Math.round(wx[g.day].max)}°
+              ${wx[g.day].rain != null && html`<small>☔${wx[g.day].rain}%</small>`}</span>`}
             ${sorting ? g.items.length > 1 && html`<button class="btn ghost sm push" disabled=${busy} onClick=${() => sortByTime(g.items)}>⏰ 依時間</button>`
             : html`<button class="icon-btn push" onClick=${() => setEdit({ day: g.day })}>＋</button>`}
           </div>
@@ -67,6 +89,8 @@ export function ItineraryView({ app }) {
                 </div>
                 <div class="tl-body">
                   <div class="tl-title">${it.title}</div>
+                  ${bookings.filter(b => b.itinerary_id === it.id).map(b => html`<button class="tl-ticket" key=${b.id}
+                    onClick=${e => { e.stopPropagation(); onOpenBooking?.(b.id); }}>🎫 ${b.title}${b.ref_code ? ` · ${b.ref_code}` : ''}</button>`)}
                   ${it.address && html`<div class="tl-addr">${it.address}</div>`}
                   ${it.note && html`<div class="tl-note">${it.note}</div>`}
                 </div>
@@ -80,6 +104,7 @@ export function ItineraryView({ app }) {
               </div>`)}
           </div>
         </section>`)}
+      ${exporting && html`<${ExportSheet} trip=${trip} groups=${groups} bookings=${bookings} onClose=${() => setExporting(false)} />`}
       ${edit && html`<${StopForm} app=${app} item=${edit} days=${days} onClose=${() => setEdit(null)}
         onSaved=${() => { setEdit(null); app.bump(); }} />`}
     </div>`;
@@ -217,4 +242,39 @@ function TransportLeg({ item, prev }) {
           onClick=${e => e.stopPropagation()}>導航 ↗</a>`}
       </div>
     </div>`;
+}
+
+// 📤 分享行程：圖片（存到相簿、傳 LINE）或文字
+function ExportSheet({ trip, groups, bookings, onClose }) {
+  const [busy, setBusy] = useState(false);
+  const [withBookings, setWithBookings] = useState(false);
+  const text = itineraryText(trip, groups, withBookings ? bookings : []);
+  const asImage = async () => {
+    setBusy(true);
+    try {
+      const blob = await itineraryImage(trip, groups);
+      const r = await shareOrDownload(blob, `${trip.name}-行程.png`, trip.name);
+      if (r === 'downloaded') toast('🖼️ 圖片已下載');
+    } catch (e) { errMsg(e); }
+    setBusy(false);
+  };
+  const asText = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: trip.name, text }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text); toast('📋 行程文字已複製，可以貼到 LINE'); } catch { toast('複製失敗，請長按下面的文字複製'); }
+  };
+  return html`
+    <${Sheet} title="📤 分享行程" onClose=${onClose}>
+      <div class="form">
+        <p class="muted small-text">給沒有裝旅伴的家人朋友看。圖片可以存到相簿，文字可以貼到 LINE。</p>
+        <div class="row gap wrap">
+          <button class="btn primary" disabled=${busy} onClick=${asImage}>${busy ? '產生中…' : '🖼️ 存成圖片'}</button>
+          <button class="btn ghost" onClick=${asText}>📝 分享文字</button>
+        </div>
+        ${bookings.length > 0 && html`<label class="row gap small-text"><input type="checkbox" checked=${withBookings}
+          onChange=${e => setWithBookings(e.target.checked)} /> 文字裡附上票券與訂位代號（只分享給信任的人）</label>`}
+        <textarea class="input export-preview" rows="10" readonly value=${text}></textarea>
+      </div>
+    </${Sheet}>`;
 }

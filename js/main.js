@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { html, render, toast, errMsg } from './ui.js';
+import { html, render, toast, errMsg, useOnline } from './ui.js';
 import { openLocal, openCloud, cloudConfigured, supabase } from './store.js';
 import { DEFAULT_AVATAR } from './avatar.js';
 import { distMeters } from './map.js';
 import { AvatarEditor, AvatarPreview } from './views/avatar-editor.js';
 import { TripList } from './views/trips.js';
 import { MapView } from './views/map-view.js';
-import { ItineraryView } from './views/itinerary.js';
+import { PlanView } from './views/plan.js';
+import { ExpensesView } from './views/expenses.js';
 import { PlacesView } from './views/places.js';
 import { NotesView } from './views/notes.js';
 import { CompanionsView } from './views/companions.js';
@@ -15,6 +16,7 @@ import { AuthView } from './views/auth.js';
 const TABS = [
   ['map', '🗺️', '地圖'],
   ['itinerary', '🗓️', '行程'],
+  ['expenses', '💰', '記帳'],
   ['places', '⭐', '地點'],
   ['notes', '📒', '筆記'],
   ['companions', '👥', '同行'],
@@ -41,11 +43,22 @@ function App() {
     try {
       if (cloudConfigured() && !forceLocal && localStorage.getItem('trippals.mode') !== 'local') {
         const sb = await supabase();
-        const { data } = await sb.auth.getSession();
-        if (!data.session) { setNeedAuth(true); return; }
+        let user = null;
+        try { user = (await sb.auth.getSession()).data.session?.user; } catch { /* 離線 */ }
+        // 離線時登入狀態可能更新不了：先用上次登入的帳號，資料用離線快取
+        if (!user && !navigator.onLine) {
+          try { user = JSON.parse(localStorage.getItem('trippals.user') || 'null'); } catch { /* 沒有 */ }
+        }
+        if (!user) { setNeedAuth(true); return; }
+        localStorage.setItem('trippals.user', JSON.stringify({ id: user.id, email: user.email }));
         setNeedAuth(false);
-        const s = await openCloud(data.session.user);
-        const { data: p } = await sb.from('profiles').select('*').eq('id', s.userId).maybeSingle();
+        const s = await openCloud(user);
+        const pKey = 'trippals.profile.' + s.userId;
+        let p;
+        let res;
+        try { res = await sb.from('profiles').select('*').eq('id', s.userId).maybeSingle(); } catch (e) { res = { error: e }; }
+        if (res.error) { try { p = JSON.parse(localStorage.getItem(pKey) || 'null'); } catch { p = null; } }
+        else { p = res.data; if (p) localStorage.setItem(pKey, JSON.stringify(p)); }
         setStore(s);
         setProfile(p?.avatar ? p : null);
       } else {
@@ -133,6 +146,7 @@ function App() {
   const saveProfile = async (avatar, display_name) => {
     const row = await store.put('profiles', { id: store.mode === 'cloud' ? store.userId : 'me', display_name, avatar });
     setProfile(row);
+    if (store.mode === 'cloud') localStorage.setItem('trippals.profile.' + store.userId, JSON.stringify(row));
     setScreen(trip ? 'trip' : 'trips');
     toast('✨ 角色已更新');
   };
@@ -161,6 +175,7 @@ function App() {
   const app = {
     store, profile, trip, pos, companions, version, simulate, openPlaceId, focus,
     bump: () => setVersion(v => v + 1),
+    updateTrip: t => { if (t) setTrip(t); setVersion(v => v + 1); },
     go: t => { if (t === 'profile') setScreen('profile'); else { setScreen('trip'); setTab(t); } },
     openPlace: id => { setOpenPlaceId(id); if (id) { setScreen('trip'); setTab('places'); } },
     showOnMap: p => { setFocus({ ...p, _t: Date.now() }); setOpenPlaceId(null); setTab('map'); setScreen('trip'); },
@@ -200,11 +215,13 @@ function App() {
           <${AvatarPreview} config=${profile.avatar} height=${40} spin=${false} />
         </button>
       </div>
+      ${store.mode === 'cloud' && html`<${OfflineBar} />`}
       <main class="trip-main">
         <div class="tab-pane" style=${{ display: tab === 'map' ? '' : 'none' }}>
           <${MapView} app=${app} visible=${tab === 'map'} key=${trip.id} />
         </div>
-        ${tab === 'itinerary' && html`<div class="tab-pane scroll"><${ItineraryView} app=${app} /></div>`}
+        ${tab === 'itinerary' && html`<div class="tab-pane scroll"><${PlanView} app=${app} /></div>`}
+        ${tab === 'expenses' && html`<div class="tab-pane scroll"><${ExpensesView} app=${app} /></div>`}
         ${tab === 'places' && html`<div class="tab-pane scroll"><${PlacesView} app=${app} /></div>`}
         ${tab === 'notes' && html`<div class="tab-pane scroll"><${NotesView} app=${app} /></div>`}
         ${tab === 'companions' && html`<div class="tab-pane scroll"><${CompanionsView} app=${app} /></div>`}
@@ -216,6 +233,11 @@ function App() {
           </button>`)}
       </nav>
     </div>`;
+}
+
+function OfflineBar() {
+  const online = useOnline();
+  return online ? null : html`<div class="offline-bar">📴 離線中：顯示的是上次存下來的資料，暫時不能修改</div>`;
 }
 
 render(html`<${App} />`, document.getElementById('app'));

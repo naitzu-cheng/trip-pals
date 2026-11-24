@@ -295,6 +295,13 @@ textarea.input { resize: vertical; }
 .tl-title { font-weight: 800; }
 .tl-addr { color: var(--muted); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-note { font-size: .88rem; margin-top: 4px; white-space: pre-wrap; }
+.tl-leg { display: flex; align-items: center; gap: 10px; margin: -4px 0; position: relative; }
+.tl-leg-line { width: 84px; flex: none; align-self: stretch; position: relative; }
+.tl-leg-line::before { content: ''; position: absolute; left: 70px; top: -6px; bottom: -6px; width: 2px; background: repeating-linear-gradient(var(--line) 0 4px, transparent 4px 8px); }
+.tl-leg-body { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: .82rem; color: var(--muted); padding: 4px 0; }
+.tl-leg-mode { background: #eef2ff; color: #3b5bdb; font-weight: 700; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.tl-leg-note { overflow-wrap: anywhere; }
+.tl-leg-nav { margin-left: auto; font-weight: 700; color: var(--green-d); text-decoration: none; white-space: nowrap; }
 
 /* ---------- 地點 ---------- */
 .list { display: flex; flex-direction: column; gap: 10px; }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { html, Sheet, Field, Empty, toast, errMsg, fmtDate, daysBetween, confirmBox } from '../ui.js';
-import { searchPlaces, googleMapsSearch } from '../geo.js';
+import { searchPlaces, googleMapsSearch, googleMapsDirections } from '../geo.js';
+import { TRANSPORT_MODES, transportOf } from '../consts.js';
 import { groupStops, stopLabel, saveOrder } from '../itin.js';
 
 export function ItineraryView({ app }) {
@@ -58,6 +59,7 @@ export function ItineraryView({ app }) {
           ${!g.items.length && html`<div class="muted pad">（空）</div>`}
           <div class="timeline">
             ${g.items.map((it, i) => html`
+              ${(it.transport || it.transport_note) && html`<${TransportLeg} key=${'t' + it.id} item=${it} prev=${g.items[i - 1]} />`}
               <div class="tl-item" key=${it.id} onClick=${() => !sorting && setEdit(it)}>
                 <div class="tl-time">${it.time || ''}</div>
                 <div class="tl-dot" style=${{ background: g.color, boxShadow: `0 0 0 2px ${g.color}` }}>
@@ -121,7 +123,7 @@ export function NoResultTips({ q, empty }) {
 
 function StopForm({ app, item, days, onClose, onSaved }) {
   const { store, trip } = app;
-  const [f, setF] = useState({ title: '', time: '', note: '', address: '', ...item });
+  const [f, setF] = useState({ title: '', time: '', note: '', address: '', transport: '', transport_note: '', ...item });
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [noAuto, setNoAuto] = useState(false); // 使用者自己把地點清掉了，就不要再自動帶入
@@ -130,7 +132,7 @@ function StopForm({ app, item, days, onClose, onSaved }) {
   const save = async e => {
     e.preventDefault();
     if (!f.title.trim()) return toast('請輸入行程名稱');
-    const row = { ...f, trip_id: trip.id, day: f.day || null };
+    const row = { ...f, trip_id: trip.id, day: f.day || null, transport: f.transport || null, transport_note: f.transport_note?.trim() || null };
     // 新增或換天：排到那天最後面
     if (!item.id || (item.day || null) !== row.day) row.position = Date.now();
     setSaving(true);
@@ -180,6 +182,14 @@ function StopForm({ app, item, days, onClose, onSaved }) {
           : html`<${PlaceSearch} near=${trip.center} fallback=${f.title} onQuery=${setQuery} onPick=${r =>
               setF(x => ({ ...x, lat: r.lat, lng: r.lng, address: r.address, title: x.title || r.name }))} />`}
         </${Field}>
+        <${Field} label="交通方式（怎麼到這裡，選填）">
+          <div class="chips wrap tight">
+            ${TRANSPORT_MODES.map(([k, icon, label]) => html`<button type="button" class=${'chip' + (f.transport === k ? ' on' : '')}
+              onClick=${() => set('transport', f.transport === k ? '' : k)}>${icon} ${label}</button>`)}
+          </div>
+          <input class="input" style="margin-top:8px" value=${f.transport_note || ''} placeholder="例：JR 山手線 往池袋 · 約 20 分 · ¥200"
+            onInput=${e => set('transport_note', e.target.value)} />
+        </${Field}>
         <${Field} label="備註"><textarea class="input" rows="3" value=${f.note || ''}
           onInput=${e => set('note', e.target.value)}></textarea></${Field}>
         <div class="row gap sheet-actions">
@@ -190,4 +200,21 @@ function StopForm({ app, item, days, onClose, onSaved }) {
         </div>
       </form>
     </${Sheet}>`;
+}
+
+// 時間軸上兩站之間的交通方式；上一站和這站都有座標時，可以點開 Google 地圖導航
+function TransportLeg({ item, prev }) {
+  const t = transportOf(item.transport);
+  const gmode = t ? t[3] : 'transit';
+  const canNav = gmode && prev?.lat != null && item.lat != null;
+  return html`
+    <div class="tl-leg">
+      <div class="tl-leg-line"></div>
+      <div class="tl-leg-body">
+        <span class="tl-leg-mode">${t ? `${t[1]} ${t[2]}` : '🧭'}</span>
+        ${item.transport_note && html`<span class="tl-leg-note">${item.transport_note}</span>`}
+        ${canNav && html`<a class="tl-leg-nav" href=${googleMapsDirections(prev, item, gmode)} target="_blank" rel="noopener"
+          onClick=${e => e.stopPropagation()}>導航 ↗</a>`}
+      </div>
+    </div>`;
 }

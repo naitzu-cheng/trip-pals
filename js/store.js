@@ -106,6 +106,9 @@ class CloudStore {
     if (error && /'position' column|column .*position/i.test(error.message)) {
       throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/002_itinerary_position.sql');
     }
+    if (error && /'transport(_note)?' column|column .*transport/i.test(error.message)) {
+      throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/004_itinerary_transport.sql');
+    }
     if (error) throw new Error(error.message);
     return data;
   }

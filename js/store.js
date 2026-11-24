@@ -6,11 +6,13 @@
 //   list(table, match)      -> rows（依 created_at 排序）
 //   put(table, row)         -> row（新增或更新，id 由前端產生）
 //   remove(table, id)
-//   uploadImage(blob)       -> ref 字串
+//   uploadImage(blob, { shared }) -> ref 字串（shared：同旅程成員都看得到）
 //   imageUrl(ref)           -> 可顯示的 URL
 //   removeImage(ref)
 
-export const TABLES = ['trips', 'itinerary', 'places', 'place_items', 'notes', 'profiles'];
+export const TABLES = ['trips', 'itinerary', 'places', 'place_items', 'notes', 'profiles', 'expenses', 'bookings', 'memories'];
+// 同旅程成員共享的資料表（雲端用 created_by 記錄是誰建立的）
+const SHARED = ['itinerary', 'expenses', 'bookings', 'memories'];
 
 export const uid = () =>
   (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -22,7 +24,8 @@ const byCreated = (a, b) => String(a.created_at || '').localeCompare(String(b.cr
 
 // 刪除時要一併刪掉的子資料（雲端由 FK cascade 處理）
 const CASCADE = {
-  trips: [['itinerary', 'trip_id'], ['places', 'trip_id'], ['place_items', 'trip_id'], ['notes', 'trip_id']],
+  trips: [['itinerary', 'trip_id'], ['places', 'trip_id'], ['place_items', 'trip_id'], ['notes', 'trip_id'],
+    ['expenses', 'trip_id'], ['bookings', 'trip_id'], ['memories', 'trip_id']],
   places: [['place_items', 'place_id']],
 };
 
@@ -35,7 +38,7 @@ class LocalStore {
   }
   async init() {
     this.db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('trippals', 1);
+      const req = indexedDB.open('trippals', 2);
       req.onupgradeneeded = () => {
         const db = req.result;
         for (const t of TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
@@ -109,20 +112,35 @@ class CloudStore {
     if (error && /'transport(_note)?' column|column .*transport/i.test(error.message)) {
       throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/004_itinerary_transport.sql');
     }
+    if (error && /expenses|bookings|memories|'currency' column|'guests' column/i.test(error.message)) {
+      throw new Error('資料庫需要更新：請到 Supabase 的 SQL Editor 執行 supabase/migrations/005_trip_tools.sql');
+    }
+    if (error && isNetErr(error)) throw new Error('目前離線，等有網路再試一次');
     if (error) throw new Error(error.message);
     return data;
   }
   async list(table, match = {}) {
+    // 有網路就抓最新的並存一份；沒網路就用上次存的（離線也能看行程、票券、帳）
+    const key = `${this.userId}:${table}:${JSON.stringify(match)}`;
     let q = this.sb.from(table).select('*');
     for (const [k, v] of Object.entries(match)) q = q.eq(k, v);
-    return this._err(await q.order('created_at', { ascending: true }));
+    let res;
+    try { res = await q.order('created_at', { ascending: true }); } catch (e) { res = { error: e }; }
+    if (res.error && isNetErr(res.error)) {
+      const cached = await cacheGet(key);
+      if (cached) { setOffline(true); return cached; }
+    }
+    const rows = this._err(res);
+    setOffline(false);
+    cacheSet(key, rows);
+    return rows;
   }
   async put(table, row) {
     const full = { ...row };
     if (!full.id) full.id = uid();
     if (table === 'trips') full.owner_id ??= this.userId;
-    else if (table !== 'profiles' && table !== 'itinerary') full.user_id ??= this.userId;
-    if (table === 'itinerary') full.created_by ??= this.userId;
+    else if (table !== 'profiles' && !SHARED.includes(table)) full.user_id ??= this.userId;
+    if (SHARED.includes(table)) full.created_by ??= this.userId;
     // 先 update，沒有才 insert（upsert 會套用 insert 權限，非建立者編輯旅程會被擋）
     if (row.id) {
       const { id, ...patch } = full;
@@ -133,15 +151,17 @@ class CloudStore {
     return rows[0];
   }
   async remove(table, id) {
-    if (table === 'places' || table === 'notes' || table === 'place_items') {
+    if (['places', 'notes', 'place_items', 'bookings', 'memories'].includes(table)) {
       const { data } = await this.sb.from(table).select('images').eq('id', id).maybeSingle();
       for (const ref of data?.images || []) await this.removeImage(ref);
     }
     this._err(await this.sb.from(table).delete().eq('id', id));
   }
-  async uploadImage(blob) {
+  async uploadImage(blob, { shared = false } = {}) {
     // 路徑含旅程 id：分享給夥伴時，對方只看得到這趟旅程的圖
-    const path = this.currentTrip ? `${this.userId}/${this.currentTrip}/${uid()}.jpg` : `${this.userId}/${uid()}.jpg`;
+    // shared（票券、回憶）：放在 trips/<旅程>/ 底下，同旅程成員都看得到
+    const path = shared && this.currentTrip ? `trips/${this.currentTrip}/${uid()}.jpg`
+      : this.currentTrip ? `${this.userId}/${this.currentTrip}/${uid()}.jpg` : `${this.userId}/${uid()}.jpg`;
     this._err(await this.sb.storage.from('media').upload(path, blob, { contentType: blob.type || 'image/jpeg' }));
     return 'sb:' + path;
   }
@@ -150,8 +170,15 @@ class CloudStore {
     if (!ref.startsWith('sb:')) return ref;
     const hit = this.urlCache.get(ref);
     if (hit && hit.exp > Date.now()) return hit.url;
-    const { data } = await this.sb.storage.from('media').createSignedUrl(ref.slice(3), 3600);
-    const url = data?.signedUrl || '';
+    let url = '';
+    try {
+      const { data } = await this.sb.storage.from('media').createSignedUrl(ref.slice(3), 3600);
+      url = data?.signedUrl || '';
+    } catch { /* 離線 */ }
+    // 記住最後一次的網址：離線時 service worker 會用路徑找到快取的圖片
+    const memo = 'trippals.img.' + ref;
+    if (url) { try { localStorage.setItem(memo, url); } catch { /* 空間滿了 */ } }
+    else return localStorage.getItem(memo) || '';
     this.urlCache.set(ref, { url, exp: Date.now() + 3500e3 });
     return url;
   }
@@ -203,6 +230,44 @@ class CloudStore {
   async privateStatus(tripId) {
     return this._shareErr(await this.sb.rpc('private_status', { t: tripId })) || [];
   }
+}
+
+/* ---------------- 離線快取 ---------------- */
+const isNetErr = e => /fetch|network|load failed|offline/i.test(e?.message || String(e));
+
+let cacheDb;
+function cacheOpen() {
+  cacheDb ??= new Promise((resolve, reject) => {
+    const req = indexedDB.open('trippals-cache', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return cacheDb;
+}
+export async function cacheGet(key) {
+  try {
+    const db = await cacheOpen();
+    return await new Promise(res => {
+      const r = db.transaction('kv').objectStore('kv').get(key);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(undefined);
+    });
+  } catch { return undefined; }
+}
+export async function cacheSet(key, value) {
+  try {
+    const db = await cacheOpen();
+    db.transaction('kv', 'readwrite').objectStore('kv').put(value, key);
+  } catch { /* 存不了就算了 */ }
+}
+
+// 目前是不是在用離線資料（給畫面上方的提示用）
+export let offline = false;
+function setOffline(v) {
+  if (offline === v) return;
+  offline = v;
+  dispatchEvent(new CustomEvent('trippals-offline', { detail: v }));
 }
 
 /* ---------------- 啟動 ---------------- */

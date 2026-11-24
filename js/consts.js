@@ -45,3 +45,32 @@ export const TRANSPORT_MODES = [
   ['other', '🧭', '其他', 'transit'],
 ];
 export const transportOf = k => TRANSPORT_MODES.find(x => x[0] === k);
+
+// 記帳分類
+export const EXPENSE_CATS = [
+  ['food', '🍜', '餐飲'],
+  ['transport', '🚃', '交通'],
+  ['stay', '🏨', '住宿'],
+  ['ticket', '🎟️', '門票'],
+  ['shop', '🛍️', '購物'],
+  ['other', '💸', '其他'],
+];
+export const expenseCat = k => EXPENSE_CATS.find(x => x[0] === k) || EXPENSE_CATS[5];
+
+// 常用幣別（第一個是預設的旅程幣別）
+export const CURRENCIES = [
+  ['TWD', '新台幣'], ['JPY', '日圓'], ['KRW', '韓元'], ['USD', '美元'], ['EUR', '歐元'], ['HKD', '港幣'],
+  ['CNY', '人民幣'], ['THB', '泰銖'], ['SGD', '新加坡幣'], ['MYR', '馬幣'], ['VND', '越南盾'], ['GBP', '英鎊'],
+  ['AUD', '澳幣'], ['CAD', '加幣'], ['PHP', '菲律賓披索'], ['IDR', '印尼盾'], ['CHF', '瑞士法郎'], ['NZD', '紐幣'],
+];
+
+// 票券與訂位
+export const BOOKING_KINDS = [
+  ['flight', '✈️', '機票'],
+  ['train', '🚄', '車票'],
+  ['hotel', '🏨', '住宿'],
+  ['ticket', '🎟️', '門票'],
+  ['car', '🚗', '租車'],
+  ['other', '📄', '其他'],
+];
+export const bookingKind = k => BOOKING_KINDS.find(x => x[0] === k) || BOOKING_KINDS[5];

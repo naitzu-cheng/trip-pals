@@ -11,6 +11,12 @@
 | 3. 標註地點＋想逛/想買/想參觀 | 地圖上點 📌 或搜尋後「加入我的地點」，每個地點可新增「想逛／想買／想參觀」，支援文字、圖片、網址、打勾。**只有自己看得到** |
 | 4. 多次旅遊 | 旅程列表，可以建立、編輯、刪除多趟旅程，旅程結束後保留成「回憶」 |
 | 5. 筆記（攜帶清單、穿搭） | 🎒 攜帶清單（有打包進度、常用清單一鍵加入）、👗 每日穿搭（可上傳照片）、📝 備忘。**只有自己看得到** |
+| 6. 記帳分帳 | 💰 記下誰付了多少、哪些人分（可平分或自訂金額），支援外幣自動換算匯率，最後算出「誰該給誰多少」，還錢後按「已還」。沒用 App 的家人也能加名字一起分帳 |
+| 7. 票券與訂位 | 🎫 機票、車票、住宿、門票的訂位代號（點一下複製）、時間、QR code 截圖，可以對應到行程。同行人共享 |
+| 8. 每日天氣 | 行程每一天旁邊顯示當地天氣、氣溫、降雨機率（出發前 16 天內才查得到） |
+| 9. 旅行回憶 | 📸 照片＋一句話，依日期排成時間軸，同行人一起記錄 |
+| 10. 分享行程 | 📤 把行程存成一張圖片，或複製成文字貼到 LINE，給沒裝 App 的人看 |
+| 11. 離線也能看 | 看過的行程、票券、記帳、圖片會存在手機裡，沒網路也打得開（離線時不能修改） |
 
 在電腦上測試時，可以按 🎮 **模擬模式**，點地圖讓角色走過去（不需要手機也能玩）。
 
@@ -101,8 +107,9 @@ npx vercel trip-pals --prod
 | [`supabase/migrations/002_itinerary_position.sql`](supabase/migrations/002_itinerary_position.sql) | 行程可以手動排序 |
 | [`supabase/migrations/003_private_share.sql`](supabase/migrations/003_private_share.sql) | 用密碼把自己的地點 / 筆記分享給同行夥伴 |
 | [`supabase/migrations/004_itinerary_transport.sql`](supabase/migrations/004_itinerary_transport.sql) | 行程可以填寫交通方式 |
+| [`supabase/migrations/005_trip_tools.sql`](supabase/migrations/005_trip_tools.sql) | 記帳分帳、票券與訂位、旅行回憶 |
 
-新建立的專案請先執行 `schema.sql`，再依序執行 `migrations/` 裡的檔案（002、004 已包含在 schema.sql，可略過）。
+新建立的專案請先執行 `schema.sql`，再依序執行 `migrations/` 裡的檔案（002、004、005 已包含在 schema.sql，可略過）。
 
 ---
 
@@ -115,6 +122,8 @@ npx vercel trip-pals --prod
 | 地點搜尋 | Nominatim（OpenStreetMap）＋ Photon（模糊搜尋）＋ 日本國土地理院（日本地址），也支援經緯度與 Google 地圖網址 |
 | 路線規劃 | OSRM（routing.openstreetmap.de） |
 | 大眾運輸 | 開啟 Google 地圖導航（深層連結） |
+| 天氣 | [Open-Meteo](https://open-meteo.com) |
+| 匯率 | [ExchangeRate-API 免費版](https://www.exchangerate-api.com/docs/free)（open.er-api.com） |
 | 介面 | Preact + htm（不需要 build） |
 
 如果之後想改用 Google Maps 的地點資料或大眾運輸 API，需要申請 Google Maps Platform API key 並綁定帳單。可以改寫 `js/geo.js` 裡的 `searchPlaces` 和 `route` 函式。
@@ -132,6 +141,9 @@ trip-pals/
 │  ├─ avatar.js          3D 角色產生器
 │  ├─ map.js             3D 地圖 + 角色圖層
 │  ├─ geo.js             搜尋、路線、Google 地圖連結
+│  ├─ money.js           記帳：匯率、分帳計算
+│  ├─ weather.js         每日天氣
+│  ├─ export.js          行程匯出成圖片／文字
 │  ├─ images.js          上傳前壓縮圖片
 │  ├─ ui.js / consts.js  共用元件、常數
 │  └─ views/             各畫面

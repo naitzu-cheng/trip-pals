@@ -77,7 +77,7 @@ export function ImageGrid({ store, images = [], onRemove, onOpen }) {
   </div>`;
 }
 
-export function ImagePicker({ store, onAdd, label = '📷 加入圖片' }) {
+export function ImagePicker({ store, onAdd, label = '📷 加入圖片', shared = false }) {
   const ref = useRef();
   const [busy, setBusy] = useState(false);
   const pick = async e => {
@@ -87,7 +87,7 @@ export function ImagePicker({ store, onAdd, label = '📷 加入圖片' }) {
     setBusy(true);
     try {
       const refs = [];
-      for (const f of files) refs.push(await store.uploadImage(await compressImage(f)));
+      for (const f of files) refs.push(await store.uploadImage(await compressImage(f), { shared }));
       onAdd(refs);
     } catch (err) { errMsg(err); }
     setBusy(false);
@@ -141,3 +141,25 @@ export const safeUrl = u => {
   const s = u.trim();
   return /^https?:\/\//i.test(s) ? s : 'https://' + s;
 };
+
+/* ---------- 金額 ---------- */
+const NO_DECIMALS = ['TWD', 'JPY', 'KRW', 'VND', 'IDR'];
+export function fmtMoney(n, cur = 'TWD') {
+  const digits = NO_DECIMALS.includes(cur) ? 0 : 2;
+  const v = Number(n) || 0;
+  return `${cur} ${v.toLocaleString('zh-TW', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+/* ---------- 離線提示 ---------- */
+export function useOnline() {
+  const [online, setOnline] = useState(navigator.onLine);
+  const [stale, setStale] = useState(false);
+  useEffect(() => {
+    const up = () => setOnline(true), down = () => setOnline(false), st = e => setStale(e.detail);
+    addEventListener('online', up);
+    addEventListener('offline', down);
+    addEventListener('trippals-offline', st);
+    return () => { removeEventListener('online', up); removeEventListener('offline', down); removeEventListener('trippals-offline', st); };
+  }, []);
+  return online && !stale;
+}

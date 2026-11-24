@@ -100,8 +100,9 @@ npx vercel trip-pals --prod
 |---|---|
 | [`supabase/migrations/002_itinerary_position.sql`](supabase/migrations/002_itinerary_position.sql) | 行程可以手動排序 |
 | [`supabase/migrations/003_private_share.sql`](supabase/migrations/003_private_share.sql) | 用密碼把自己的地點 / 筆記分享給同行夥伴 |
+| [`supabase/migrations/004_itinerary_transport.sql`](supabase/migrations/004_itinerary_transport.sql) | 行程可以填寫交通方式 |
 
-新建立的專案請先執行 `schema.sql`，再依序執行 `migrations/` 裡的檔案（002 已包含在 schema.sql，可略過）。
+新建立的專案請先執行 `schema.sql`，再依序執行 `migrations/` 裡的檔案（002、004 已包含在 schema.sql，可略過）。
 
 ---
 

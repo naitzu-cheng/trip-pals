@@ -46,6 +46,8 @@ create table if not exists public.itinerary (
   address text,
   note text,
   position double precision,
+  transport text,        -- 怎麼到這一站：walk / train / metro / bus / taxi ...
+  transport_note text,   -- 例：JR 山手線 約 20 分
   created_at timestamptz default now()
 );
 

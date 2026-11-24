@@ -29,3 +29,19 @@ export const PACK_PRESETS = {
 };
 
 export const MEMBER_COLORS = ['#4c6ef5', '#f76707', '#37b24d', '#d6336c', '#7048e8', '#1098ad', '#f59f00'];
+
+// 行程的交通方式（「怎麼到這一站」）；第 3 欄是開 Google 地圖導航時用的 travelmode
+export const TRANSPORT_MODES = [
+  ['walk', '🚶', '步行', 'foot'],
+  ['train', '🚆', '火車', 'transit'],
+  ['metro', '🚇', '地鐵', 'transit'],
+  ['shinkansen', '🚄', '高鐵／新幹線', 'transit'],
+  ['bus', '🚌', '公車', 'transit'],
+  ['taxi', '🚕', '計程車', 'car'],
+  ['car', '🚗', '開車', 'car'],
+  ['bike', '🚲', '自行車', 'bike'],
+  ['flight', '✈️', '飛機', null],
+  ['ferry', '⛴️', '船', null],
+  ['other', '🧭', '其他', 'transit'],
+];
+export const transportOf = k => TRANSPORT_MODES.find(x => x[0] === k);
